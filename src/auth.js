@@ -33,16 +33,15 @@ export function verifyPassword(pw, stored) {
   return crypto.timingSafeEqual(hash, Buffer.from(hashHex, 'hex'));
 }
 
-export function createSession(userId) {
+export async function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare(`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+${SESSION_DAYS} days'))`)
-    .run(sha256(token), userId);
-  db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(userId);
-  db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+  await db.run(`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+${SESSION_DAYS} days'))`, sha256(token), userId);
+  await db.run("UPDATE users SET last_login_at = datetime('now') WHERE id = ?", userId);
+  await db.run("DELETE FROM sessions WHERE expires_at < datetime('now')");
   return token;
 }
 
-export const endSession = (token) => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
+export const endSession = (token) => db.run('DELETE FROM sessions WHERE token_hash = ?', sha256(token));
 
 export function publicUser(u) {
   const perms = u.is_admin ? Object.keys(MODULES) : JSON.parse(u.permissions || '[]').filter((p) => p in MODULES);
@@ -53,17 +52,16 @@ export function publicUser(u) {
 const MASTER = { id: 0, name: 'Administrador (token)', login: '', is_admin: 1, active: 1, master: true };
 
 // Token do header -> usuário (ou null)
-export function authenticate(token) {
+export async function authenticate(token) {
   if (!token) return null;
   if (token.length === ADMIN_TOKEN.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(ADMIN_TOKEN))) {
     return publicUser(MASTER);
   }
-  const row = db.prepare(`SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.active = 1`).get(sha256(token));
+  const row = await db.get(`SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.active = 1`, sha256(token));
   if (!row) return null;
   // Atualiza "visto por último" no máximo a cada 5 minutos
-  db.prepare("UPDATE sessions SET last_seen = datetime('now') WHERE token_hash = ? AND last_seen < datetime('now', '-5 minutes')")
-    .run(sha256(token));
+  await db.run("UPDATE sessions SET last_seen = datetime('now') WHERE token_hash = ? AND last_seen < datetime('now', '-5 minutes')", sha256(token));
   return publicUser(row);
 }
 
