@@ -1,6 +1,6 @@
 {
   "name": "catalogo-app",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -11,6 +11,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~58.0.16",
     "expo": "~58.0.22",
+    "expo-application": "~58.1.2",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.14",
     "expo-device": "~58.0.5",

@@ -3,6 +3,7 @@
 // baixa o APK sozinho e abre o instalador do Android. O Android não deixa um app se instalar sem confirmação:
 // o usuário só toca em "Atualizar" (e, na primeira vez, permite instalar apps desta origem).
 import { Platform } from 'react-native';
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Directory, File, Paths } from 'expo-file-system';
 import { getContentUriAsync } from 'expo-file-system/legacy';
@@ -13,8 +14,13 @@ import { versaoMaisNova } from './regras';
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
 const FLAG_ACTIVITY_NEW_TASK = 0x10000000;
 
-/** Versão instalada no formato da publicada: "1.0.1-5" (versão-compilação; a compilação é o versionCode). */
-export const versaoInstalada = () => `${Constants.expoConfig?.version ?? '0'}-${Constants.expoConfig?.android?.versionCode ?? 0}`;
+/**
+ * Versão instalada no formato da publicada: "1.0.1-5" (versão-compilação; a compilação é o versionCode).
+ * Lida do pacote instalado (expo-application), não da configuração embutida no JavaScript: na 1.0.1 a
+ * configuração embutida trazia versionCode 1, o app se achava sempre mais velho e ficava se atualizando.
+ */
+export const versaoInstalada = () =>
+  `${Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '0'}-${Application.nativeBuildVersion ?? '0'}`;
 
 /** Versão publicada mais nova que a instalada (compara versão e, se igual, a compilação), ou null. */
 export async function versaoNova(servidor: string): Promise<string | null> {

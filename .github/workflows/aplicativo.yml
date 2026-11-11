@@ -16,6 +16,8 @@ permissions:
 
 env:
   VERSION_CODE: ${{ github.run_number }}
+  # Também no bundle JavaScript (gradle), não só no prebuild
+  APP_VERSION_CODE: ${{ github.run_number }}
 
 jobs:
   apk:

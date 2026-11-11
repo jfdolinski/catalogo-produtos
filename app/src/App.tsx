@@ -72,6 +72,8 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   // Atualização: versão nova encontrada, baixando, instalador aberto ou falha
   const [atualizacao, setAtualizacao] = useState<{ versao: string; estado: 'baixando' | 'instalador' | 'erro'; detalhe?: string } | null>(null);
   const baixando = useRef(false);
+  // Versões já oferecidas nesta execução: depois da primeira vez, só pelo aviso (sem abrir o instalador de novo)
+  const oferecidas = useRef(new Set<string>());
   const [permissao, pedirPermissao] = useCameraPermissions();
 
   const atualizar = useCallback(async (versao: string) => {
@@ -95,8 +97,13 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
     const conferir = () => {
       if (Platform.OS !== 'android') return;
       void versaoNova(sessao.servidor).then((v) => {
-        if (v) void atualizar(v);
-        else setAtualizacao(null);
+        if (!v) return setAtualizacao(null);
+        if (oferecidas.current.has(v)) {
+          setAtualizacao((a) => (a && a.versao === v ? a : { versao: v, estado: 'instalador' }));
+          return;
+        }
+        oferecidas.current.add(v);
+        void atualizar(v);
       });
     };
     conferir();
