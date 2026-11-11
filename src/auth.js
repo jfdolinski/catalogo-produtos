@@ -98,7 +98,7 @@ const RULES = [
   [null, /^\/(companies|cnpj)(\/|$)/, ['empresas']],
   [null, /^\/(plans|invoices|billing)(\/|$)/, ['cobranca']],
   [null, /^\/users(\/|$)/, ['usuarios']],
-  [null, /^\/(products|barcodes|images|pending|product-ids|code)(\/|$)/, ['produtos', 'atualizacao']],
+  [null, /^\/(products|barcodes|images|pending|product-ids|code|field-values)(\/|$)/, ['produtos', 'atualizacao']],
 ];
 
 export function allowed(user, method, path) {

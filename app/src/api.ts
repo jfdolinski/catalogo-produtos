@@ -15,6 +15,9 @@ export interface Usuario {
   is_admin: boolean;
 }
 
+/** Itens da fila de atualização, como no painel ('' = todos). */
+export type Origem = 'pending' | 'overdue' | 'due_week' | 'no_image' | '';
+
 export interface Sessao {
   servidor: string;
   token: string;
@@ -155,12 +158,21 @@ export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
   return {
     eu: () => chamar<{ user: Usuario }>('/me'),
     produto: (id: number) => chamar<Produto>(`/products/${id}`),
+    /** Valores já cadastrados de marca ou categoria que contêm `q` (mais usados primeiro). */
+    valores: (campo: 'brand' | 'category', q: string) =>
+      chamar<{ value: string; products: number }[]>(`/field-values/${campo}?q=${encodeURIComponent(q)}&limit=8`, { limiteMs: 15_000 }),
+    /** Ids da fila de atualização, na mesma ordem do painel (pendentes: mais consultados primeiro). */
+    fila: (origem: Origem) => {
+      const p = new URLSearchParams(origem ? { [origem]: '1' } : {});
+      if (origem === 'pending') p.set('order', 'requests');
+      return chamar<{ ids: number[] }>(`/product-ids?${p}`);
+    },
     porCodigo: (codigo: string) => chamar<{ found: boolean; code: string; product?: Produto }>(`/code/${encodeURIComponent(codigo)}`),
     sugestoes: (codigo: string, cosmos: 'cache' | 'only' = 'cache') =>
       chamar<{ cosmos_available: boolean; results: Sugestao[] }>(`/lookup/${encodeURIComponent(codigo)}?cosmos=${cosmos}`),
     cadastrar: (dados: { name: string; brand: string; category: string }, codigo: string) =>
       chamar<Produto>('/products', { metodo: 'POST', corpo: { ...dados, barcodes: [codigo] } }),
-    salvar: (id: number, dados: { name: string; brand: string }) => chamar<Produto>(`/products/${id}`, { metodo: 'PUT', corpo: dados }),
+    salvar: (id: number, dados: { name: string; brand: string; category: string }) => chamar<Produto>(`/products/${id}`, { metodo: 'PUT', corpo: dados }),
     revisado: (id: number) => chamar<Produto>(`/products/${id}/resolve`, { metodo: 'POST' }),
     fotoDaUrl: (id: number, url: string) => chamar<{ product: Produto }>(`/products/${id}/images/from-url`, { metodo: 'POST', corpo: { url } }),
     ordenar: (id: number, ids: number[]) => chamar<Produto>(`/products/${id}/images/order`, { metodo: 'PUT', corpo: { ids } }),

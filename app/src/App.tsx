@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useCameraPermissions } from 'expo-camera';
-import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, type Produto, type Sessao } from './api';
+import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, type Origem, type Produto, type Sessao } from './api';
 import { baixarEInstalar, versaoInstalada, versaoNova } from './atualizacao';
 import { LeitorCodigo } from './LeitorCodigo';
 import { codigoDeBarras, gtinValido } from './regras';
@@ -61,7 +61,18 @@ type Tela =
   | { qual: 'novo'; codigo: string }
   | { qual: 'fotos'; produto: Produto }
   | { qual: 'enviando'; produto: Produto; total: number; feitas: number }
-  | { qual: 'produto'; produto: Produto; aviso?: string | null };
+  | { qual: 'produto'; produto: Produto; aviso?: string | null }
+  | { qual: 'carregando'; texto: string };
+
+// Fila de atualização (como no painel): ids na ordem do servidor e o item aberto
+type Fila = { origem: Origem; ids: number[]; indice: number };
+const ORIGENS: { valor: Origem; nome: string }[] = [
+  { valor: 'pending', nome: 'Pendentes (mais consultados primeiro)' },
+  { valor: 'overdue', nome: 'Vencidos' },
+  { valor: 'due_week', nome: 'Vencendo em 7 dias' },
+  { valor: 'no_image', nome: 'Sem foto real' },
+  { valor: '', nome: 'Todos' },
+];
 
 function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: string | null) => void }) {
   const api = useMemo(() => clienteDa(sessao, () => encerrar('Este celular foi desvinculado ou o usuário foi desativado. Vincule de novo pelo painel.')), [sessao, encerrar]);
@@ -75,6 +86,61 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   // Versões já oferecidas nesta execução: depois da primeira vez, só pelo aviso (sem abrir o instalador de novo)
   const oferecidas = useRef(new Set<string>());
   const [permissao, pedirPermissao] = useCameraPermissions();
+  const [aba, setAba] = useState<'ler' | 'fila'>('ler');
+  const [origem, setOrigem] = useState<Origem>('pending');
+  const [fila, setFila] = useState<Fila | null>(null);
+  const campo = useRef<ComponentRef<typeof TextInput>>(null);
+
+  // Cursor sempre no campo do código ao voltar para a leitura (e quando o app volta para a frente)
+  const naLeitura = tela.qual === 'ler' && aba === 'ler';
+  useEffect(() => {
+    if (!naLeitura) return;
+    const t = setTimeout(() => campo.current?.focus(), 250);
+    const s = AppState.addEventListener('change', (estado) => estado === 'active' && setTimeout(() => campo.current?.focus(), 250));
+    return () => {
+      clearTimeout(t);
+      s.remove();
+    };
+  }, [naLeitura]);
+
+  /** Abre o item `indice` da fila; item apagado ou mesclado enquanto a fila estava aberta sai dela. */
+  async function abrirItem(f: Fila, indice: number, aviso: string | null = null): Promise<void> {
+    if (indice >= f.ids.length) {
+      setFila(null);
+      setTela({ qual: 'ler' });
+      setAba('fila');
+      setErro(null);
+      setResumo(f.ids.length ? `Fim da fila: ${f.ids.length} item(ns).` : 'Nenhum item nesta seleção.');
+      return;
+    }
+    setTela({ qual: 'carregando', texto: `Abrindo o item ${indice + 1} de ${f.ids.length}…` });
+    try {
+      const produto = await api.produto(f.ids[indice]);
+      setFila({ ...f, indice });
+      setTela({ qual: 'produto', produto, aviso });
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 404) {
+        const ids = f.ids.filter((_, i) => i !== indice);
+        return abrirItem({ ...f, ids }, indice, aviso);
+      }
+      setFila(null);
+      setTela({ qual: 'ler' });
+      setErro(e instanceof ErroApi ? e.message : 'Não foi possível abrir o item da fila.');
+    }
+  }
+
+  async function iniciarFila() {
+    setErro(null);
+    setResumo(null);
+    setTela({ qual: 'carregando', texto: 'Montando a fila…' });
+    try {
+      const { ids } = await api.fila(origem);
+      await abrirItem({ origem, ids, indice: 0 }, 0);
+    } catch (e) {
+      setTela({ qual: 'ler' });
+      setErro(e instanceof ErroApi ? e.message : 'Não foi possível montar a fila.');
+    }
+  }
 
   const atualizar = useCallback(async (versao: string) => {
     if (baixando.current) return;
@@ -190,8 +256,15 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
 
   const voltarParaLeitura = (texto: string | null = null) => {
     setTela({ qual: 'ler' });
+    setFila(null);
     setErro(null);
     setResumo(texto);
+  };
+
+  const trocarAba = (a: 'ler' | 'fila') => {
+    setAba(a);
+    setErro(null);
+    setResumo(null);
   };
 
   return (
@@ -207,7 +280,32 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
       {tela.qual === 'novo' ? (
         <TelaNovo api={api} codigo={tela.codigo} aoVoltar={() => voltarParaLeitura()} aoCadastrar={(p) => void fotografar(p, 'Produto cadastrado.')} />
       ) : tela.qual === 'produto' ? (
-        <TelaProduto key={tela.produto.id} api={api} inicial={tela.produto} aviso={tela.aviso} aoFotografar={(p) => void fotografar(p)} aoProximo={(t) => voltarParaLeitura(t)} />
+        <TelaProduto
+          key={tela.produto.id}
+          api={api}
+          inicial={tela.produto}
+          aviso={tela.aviso}
+          aoFotografar={(p) => void fotografar(p)}
+          aoProximo={(t) => (fila ? void abrirItem(fila, fila.indice + 1, t) : voltarParaLeitura(t))}
+          fila={
+            fila
+              ? {
+                  posicao: fila.indice + 1,
+                  total: fila.ids.length,
+                  aoAnterior: fila.indice > 0 ? () => void abrirItem(fila, fila.indice - 1) : undefined,
+                  aoSair: () => {
+                    voltarParaLeitura();
+                    setAba('fila');
+                  },
+                }
+              : undefined
+          }
+        />
+      ) : tela.qual === 'carregando' ? (
+        <View style={estilos.centro}>
+          <ActivityIndicator size="large" color={cores.marca} />
+          <Text style={estilos.texto}>{tela.texto}</Text>
+        </View>
       ) : tela.qual === 'enviando' ? (
         <View style={estilos.centro}>
           <ActivityIndicator size="large" color={cores.marca} />
@@ -215,6 +313,13 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
         </View>
       ) : (
         <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+          <View style={estilos.abas} accessibilityRole="tablist">
+            {(['ler', 'fila'] as const).map((a) => (
+              <Pressable key={a} accessibilityRole="tab" accessibilityState={{ selected: aba === a }} onPress={() => trocarAba(a)} style={[estilos.aba, aba === a && estilos.abaAtiva]}>
+                <Text style={[estilos.abaTexto, aba === a && estilos.abaTextoAtivo]}>{a === 'ler' ? 'Ler código' : 'Fila de atualização'}</Text>
+              </Pressable>
+            ))}
+          </View>
           {atualizacao ? (
             <Pressable disabled={atualizacao.estado === 'baixando'} onPress={() => void atualizar(atualizacao.versao)}>
               <Alerta tipo="aviso">
@@ -228,14 +333,29 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
           ) : null}
           {resumo ? <Alerta tipo="ok">{resumo}</Alerta> : null}
           {erro ? <Alerta>{erro}</Alerta> : null}
-          <Text style={estilos.titulo}>Atualizar cadastro</Text>
-          <Text style={estilos.texto}>Leia o código de barras do produto. Se ele já estiver cadastrado, a câmera abre para as fotos; se não, você cadastra na hora.</Text>
-          {Platform.OS !== 'web' ? (
-            <Botao titulo="📷 Ler código com a câmera" disabled={tela.qual === 'buscando'} onPress={() => void temCamera().then((ok) => ok && setTela({ qual: 'camera-codigo' }))} />
-          ) : null}
-          <Text style={[estilos.rotulo, { marginTop: 20 }]}>Ou digite o código</Text>
+          {aba === 'fila' ? (
+            <>
+              <Text style={estilos.titulo}>Fila de atualização</Text>
+              <Text style={estilos.texto}>Revise os cadastros um a um, como no painel: fotos, nome, marca e categoria. "Salvar e próximo" grava, renova o prazo e tira dos pendentes.</Text>
+              <Text style={estilos.rotulo}>Itens</Text>
+              {ORIGENS.map((o) => (
+                <Pressable key={o.valor || 'todos'} accessibilityRole="radio" accessibilityState={{ checked: origem === o.valor }} onPress={() => setOrigem(o.valor)} style={[estilos.opcao, origem === o.valor && estilos.opcaoAtiva]}>
+                  <View style={[estilos.radio, origem === o.valor && estilos.radioAtivo]} />
+                  <Text style={estilos.opcaoTexto}>{o.nome}</Text>
+                </Pressable>
+              ))}
+              <View style={{ height: 12 }} />
+              <Botao titulo="Iniciar fila" onPress={() => void iniciarFila()} />
+            </>
+          ) : (
+            <>
+              <Text style={estilos.titulo}>Atualizar cadastro</Text>
+              <Text style={estilos.texto}>Leia o código de barras do produto. Se ele já estiver cadastrado, a câmera abre para as fotos; se não, você cadastra na hora.</Text>
+              <Text style={estilos.rotulo}>Código de barras</Text>
           <View style={estilos.linha}>
             <TextInput
+              ref={campo}
+              autoFocus
               accessibilityLabel="Código de barras"
               style={[estilos.campo, { flex: 1 }]}
               value={digitado}
@@ -252,6 +372,13 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
             </View>
           </View>
           {tela.qual === 'buscando' ? <Text style={estilos.ajuda}>Buscando {tela.codigo}…</Text> : null}
+              {Platform.OS !== 'web' ? (
+                <View style={{ marginTop: 16 }}>
+                  <Botao titulo="📷 Ler código com a câmera" disabled={tela.qual === 'buscando'} onPress={() => void temCamera().then((ok) => ok && setTela({ qual: 'camera-codigo' }))} />
+                </View>
+              ) : null}
+            </>
+          )}
           <Text style={[estilos.ajuda, { marginTop: 24 }]}>Versão {versaoInstalada()}</Text>
         </ScrollView>
       )}
@@ -272,4 +399,14 @@ const estilos = StyleSheet.create({
   linha: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   campo: { minHeight: 48, borderWidth: 1, borderColor: cores.borda, borderRadius: 8, backgroundColor: cores.branco, paddingHorizontal: 12, fontSize: 18, color: cores.texto, letterSpacing: 1 },
   ajuda: { fontSize: 13, color: cores.suave, marginTop: 8 },
+  abas: { flexDirection: 'row', backgroundColor: cores.borda, borderRadius: 10, padding: 3, marginBottom: 16 },
+  aba: { flex: 1, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  abaAtiva: { backgroundColor: cores.branco },
+  abaTexto: { fontSize: 15, fontWeight: '600', color: cores.suave },
+  abaTextoAtivo: { color: cores.marca },
+  opcao: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 12, borderWidth: 1, borderColor: cores.borda, borderRadius: 8, backgroundColor: cores.branco, marginBottom: 8 },
+  opcaoAtiva: { borderColor: cores.marca },
+  opcaoTexto: { fontSize: 15, color: cores.texto, flex: 1 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: cores.suave },
+  radioAtivo: { borderColor: cores.marca, borderWidth: 6 },
 });

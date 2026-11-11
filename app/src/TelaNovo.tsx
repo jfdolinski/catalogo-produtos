@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ErroApi, type Api, type Produto } from './api';
 import { sugestoesUteis, type Sugestao } from './regras';
+import { CampoSugestao } from './CampoSugestao';
 import { Alerta, Botao, Cartao, cores } from './ui';
 
 const mensagem = (e: unknown) => (e instanceof ErroApi ? e.message : 'Algo deu errado. Tente de novo.');
@@ -101,10 +102,8 @@ export function TelaNovo({ api, codigo, aoCadastrar, aoVoltar }: { api: Api; cod
       <Cartao>
         <Text style={estilos.rotulo}>Nome *</Text>
         <TextInput accessibilityLabel="Nome" style={estilos.campo} value={nome} onChangeText={setNome} autoCapitalize="sentences" maxLength={300} multiline />
-        <Text style={estilos.rotulo}>Marca</Text>
-        <TextInput accessibilityLabel="Marca" style={estilos.campo} value={marca} onChangeText={setMarca} autoCapitalize="words" maxLength={120} />
-        <Text style={estilos.rotulo}>Categoria</Text>
-        <TextInput accessibilityLabel="Categoria" style={estilos.campo} value={categoria} onChangeText={setCategoria} maxLength={120} />
+        <CampoSugestao api={api} campo="brand" rotulo="Marca" valor={marca} aoMudar={setMarca} />
+        <CampoSugestao api={api} campo="category" rotulo="Categoria" valor={categoria} aoMudar={setCategoria} />
         <Botao titulo="Cadastrar e tirar as fotos" ocupado={enviando} onPress={() => void cadastrar()} />
       </Cartao>
       <Botao titulo="Voltar sem cadastrar" variante="secundario" disabled={enviando} onPress={aoVoltar} />

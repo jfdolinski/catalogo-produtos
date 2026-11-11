@@ -311,8 +311,9 @@ new IntersectionObserver((entries) => {
 }, { root: $('.sidebar'), rootMargin: '300px' }).observe($('#list-more'));
 
 async function loadCategories() {
-  const cats = await fetch('/api/v1/categories').then((r) => r.json());
-  $('#categories').innerHTML = cats.map((c) => `<option value="${c.category.replace(/"/g, '&quot;')}">`).join('');
+  // Pela rota do painel: a pública pode exigir a chave da empresa
+  const cats = await api('GET', '/api/admin/field-values/category?limit=1000').catch(() => []);
+  $('#categories').innerHTML = cats.map((c) => `<option value="${esc(c.value)}">`).join('');
 }
 // Filtros da lista: os três primeiros têm aba; os demais vêm dos cards do dashboard e aparecem como etiqueta
 const FILTER_LABELS = {

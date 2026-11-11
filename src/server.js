@@ -690,6 +690,21 @@ admin.get('/products', async (req, res) => {
   res.json({ total: r.total, page: r.page, limit: r.limit, items: await hydrate(r.rows, baseUrl(req)) });
 });
 
+// Valores já cadastrados de marca, categoria e unidade (sugestões nos campos do painel e do aplicativo), mais usados primeiro.
+// ?q= filtra por trecho (sem diferenciar maiúsculas); sem q, devolve os mais usados.
+const VALUE_FIELDS = { brand: 'brand', category: 'category', unit: 'unit' };
+admin.get('/field-values/:field', async (req, res) => {
+  const col = VALUE_FIELDS[req.params.field];
+  if (!col) throw new HttpError(400, 'Campo sem sugestões: use brand, category ou unit');
+  const q = cleanLine(req.query.q || '');
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 1000);
+  const rows = await db.prepare(`SELECT ${col} AS value, COUNT(*) AS products FROM products
+    WHERE ${col} <> ''${q ? ` AND ${col} LIKE ?` : ''} GROUP BY ${col}
+    ORDER BY ${q ? `(lower(${col}) LIKE ?) DESC, ` : ''}COUNT(*) DESC, ${col} LIMIT ?`)
+    .all(...(q ? [`%${q}%`, `${q.toLowerCase()}%`] : []), limit);
+  res.json(rows);
+});
+
 // Aplicativo: produto pelo código de barras lido na câmera ou digitado. Não conta como consulta nem cadastra.
 // O leitor pode entregar o UPC-A com 12 dígitos para um código guardado como EAN-13 (com zero à esquerda), e vice-versa.
 admin.get('/code/:code', async (req, res) => {

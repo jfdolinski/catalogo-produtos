@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ErroApi, type Api, type Produto } from './api';
+import { CampoSugestao } from './CampoSugestao';
 import { comoPrincipal } from './regras';
 import { Alerta, Botao, Cartao, cores } from './ui';
 
@@ -9,24 +10,28 @@ const mensagem = (e: unknown) => (e instanceof ErroApi ? e.message : 'Algo deu e
 /**
  * Produto encontrado (ou recém-cadastrado), depois das fotos: confere nome e marca, escolhe a foto principal,
  * apaga fotos, marca como revisado. Tudo opcional: "Próximo produto" volta direto para a leitura.
+ * Na fila de atualização, `fila` mostra a posição e troca o fim por "Salvar e próximo" / "Pular", como no painel.
  */
-export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
+export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila }: {
   api: Api;
   inicial: Produto;
   aviso?: string | null;
   aoFotografar: (p: Produto) => void;
   aoProximo: (resumo: string) => void;
+  fila?: { posicao: number; total: number; aoAnterior?: () => void; aoSair: () => void };
 }) {
   const [p, setP] = useState(inicial);
   const [nome, setNome] = useState(inicial.name ?? '');
   const [marca, setMarca] = useState(inicial.brand ?? '');
+  const [categoria, setCategoria] = useState(inicial.category ?? '');
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(aviso ?? null);
   const [revisado, setRevisado] = useState(false);
 
   const reais = p.images.filter((i) => !i.placeholder && i.id !== null);
-  const mudou = nome.trim() !== (p.name ?? '') || marca.trim() !== (p.brand ?? '');
+  const mudou = nome.trim() !== (p.name ?? '') || marca.trim() !== (p.brand ?? '') || categoria.trim() !== (p.category ?? '');
+  const dados = () => ({ name: nome.trim(), brand: marca.trim(), category: categoria.trim() });
 
   async function fazer(qual: string, acao: () => Promise<Produto | void>, sucesso: string) {
     setOcupado(qual);
@@ -39,6 +44,7 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
         // O servidor limpa espaços: o formulário passa a mostrar o que ficou gravado
         setNome(novo.name ?? '');
         setMarca(novo.brand ?? '');
+        setCategoria(novo.category ?? '');
       }
       setOk(sucesso);
     } catch (e) {
@@ -71,14 +77,14 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
 
   async function salvar() {
     if (!nome.trim()) return setErro('Informe o nome do produto.');
-    await fazer('salvar', () => api.salvar(p.id, { name: nome.trim(), brand: marca.trim() }), 'Nome e marca salvos.');
+    await fazer('salvar', () => api.salvar(p.id, dados()), 'Cadastro salvo.');
   }
 
   async function marcarRevisado() {
     await fazer(
       'revisado',
       async () => {
-        const salvo = mudou ? await api.salvar(p.id, { name: nome.trim(), brand: marca.trim() }) : null;
+        const salvo = mudou ? await api.salvar(p.id, dados()) : null;
         const r = await api.revisado(p.id);
         setRevisado(true);
         return r ?? salvo ?? undefined;
@@ -87,10 +93,26 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
     );
   }
 
+  // Fila: como o "Salvar" do painel — grava o que mudou e tira dos pendentes, depois vai ao próximo
+  async function salvarEProximo() {
+    if (!nome.trim()) return setErro('Informe o nome do produto.');
+    setOcupado('proximo');
+    setErro(null);
+    try {
+      // Salvar sempre: mesmo sem mudança conta como revisão e renova o prazo (vencidos, vencendo)
+      await api.salvar(p.id, dados());
+      if (p.pending) await api.revisado(p.id);
+      aoProximo(`${nome.trim()}: salvo.`);
+    } catch (e) {
+      setErro(mensagem(e));
+      setOcupado(null);
+    }
+  }
+
   function proximo() {
     const continuar = () => aoProximo(`${p.name}: ${reais.length} foto${reais.length === 1 ? '' : 's'}${revisado ? ', revisado' : ''}.`);
     if (mudou) {
-      Alert.alert('Nome ou marca não salvos', 'Você alterou o nome ou a marca e não salvou.', [
+      Alert.alert('Alterações não salvas', 'Você alterou o nome, a marca ou a categoria e não salvou.', [
         { text: 'Voltar', style: 'cancel' },
         { text: 'Descartar', style: 'destructive', onPress: continuar },
       ]);
@@ -99,6 +121,7 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
 
   return (
     <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+      {fila ? <Text style={estilos.posicao}>Fila: item {fila.posicao} de {fila.total}</Text> : null}
       <Text style={estilos.titulo}>{p.name}</Text>
       <Text style={estilos.codigos}>{p.barcodes.map((b) => b.code).join(' · ')}{p.pending ? '  ·  pendente de atualização' : ''}</Text>
       {erro ? <Alerta>{erro}</Alerta> : null}
@@ -129,15 +152,26 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
         <Text style={estilos.secao}>Conferir o cadastro</Text>
         <Text style={estilos.rotulo}>Nome</Text>
         <TextInput accessibilityLabel="Nome" style={estilos.campo} value={nome} onChangeText={setNome} autoCapitalize="sentences" maxLength={300} multiline />
-        <Text style={estilos.rotulo}>Marca</Text>
-        <TextInput accessibilityLabel="Marca" style={estilos.campo} value={marca} onChangeText={setMarca} autoCapitalize="words" maxLength={120} />
-        <Botao titulo="Salvar nome e marca" variante="secundario" disabled={!mudou || !!ocupado} ocupado={ocupado === 'salvar'} onPress={() => void salvar()} />
+        <CampoSugestao api={api} campo="brand" rotulo="Marca" valor={marca} aoMudar={setMarca} />
+        <CampoSugestao api={api} campo="category" rotulo="Categoria" valor={categoria} aoMudar={setCategoria} />
+        <Botao titulo="Salvar alterações" variante="secundario" disabled={!mudou || !!ocupado} ocupado={ocupado === 'salvar'} onPress={() => void salvar()} />
         <View style={{ height: 8 }} />
         <Botao titulo={revisado ? '✓ Revisado' : 'Marcar como revisado'} variante="secundario" disabled={revisado || !!ocupado} ocupado={ocupado === 'revisado'} onPress={() => void marcarRevisado()} />
         <Text style={estilos.ajuda}>Revisado renova o prazo de atualização do cadastro e tira o produto da lista de pendentes.</Text>
       </Cartao>
 
-      <Botao titulo="Próximo produto" disabled={!!ocupado} onPress={proximo} />
+      {fila ? (
+        <>
+          <Botao titulo="Salvar e próximo" ocupado={ocupado === 'proximo'} disabled={!!ocupado} onPress={() => void salvarEProximo()} />
+          <View style={estilos.linha}>
+            {fila.aoAnterior ? <View style={{ flex: 1 }}><Botao titulo="Anterior" variante="secundario" disabled={!!ocupado} onPress={fila.aoAnterior} /></View> : null}
+            <View style={{ flex: 1 }}><Botao titulo="Pular" variante="secundario" disabled={!!ocupado} onPress={proximo} /></View>
+            <View style={{ flex: 1 }}><Botao titulo="Sair da fila" variante="secundario" disabled={!!ocupado} onPress={fila.aoSair} /></View>
+          </View>
+        </>
+      ) : (
+        <Botao titulo="Próximo produto" disabled={!!ocupado} onPress={proximo} />
+      )}
     </ScrollView>
   );
 }
@@ -145,6 +179,8 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo }: {
 const estilos = StyleSheet.create({
   pagina: { padding: 16, backgroundColor: cores.fundo, flexGrow: 1 },
   titulo: { fontSize: 20, fontWeight: '700', color: cores.texto },
+  posicao: { fontSize: 13, fontWeight: '600', color: cores.marca, marginBottom: 4 },
+  linha: { flexDirection: 'row', gap: 8, marginTop: 8 },
   codigos: { fontSize: 14, color: cores.suave, marginTop: 2, marginBottom: 12 },
   secao: { fontSize: 16, fontWeight: '700', color: cores.texto, marginBottom: 10 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },

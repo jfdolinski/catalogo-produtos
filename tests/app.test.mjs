@@ -118,6 +118,18 @@ try {
   for (let i = 0; i < 9; i++) last = await post('/api/app/link', { codigo: 'ABCDEFGHJK', nome: 'x' });
   ok('muitas tentativas bloqueiam', last.s === 429, last.s);
 
+  // Sugestões de marca e categoria (campos do app e do painel)
+  await api('POST', '/api/admin/products', { name: 'Café B', brand: 'Bom Dia', category: 'Mercearia', barcodes: [gtin('789100031560')] });
+  await api('POST', '/api/admin/products', { name: 'Chá', brand: 'Bom Gosto', category: 'Bebidas', barcodes: [gtin('789100031570')] });
+  const marcas = await api('GET', '/api/admin/field-values/brand?q=bom');
+  ok('sugere marcas cadastradas, mais usadas primeiro', marcas.s === 200 && marcas.b[0].value === 'Bom Dia' && marcas.b[0].products === 2 && marcas.b.some((m) => m.value === 'Bom Gosto'), marcas.b);
+  const meio = await api('GET', '/api/admin/field-values/brand?q=gost');
+  ok('acha por trecho do meio', meio.b.length === 1 && meio.b[0].value === 'Bom Gosto', meio.b);
+  const cats = await api('GET', '/api/admin/field-values/category');
+  ok('categorias sem filtro', cats.b.map((c) => c.value).sort().join(',') === 'Bebidas,Mercearia', cats.b);
+  ok('campo sem sugestão é recusado', (await api('GET', '/api/admin/field-values/password_hash')).s === 400);
+  ok('sem permissão de produtos não vê sugestões', (await bia('GET', '/api/admin/field-values/brand')).s === 403);
+
   ok('rota de download sem APK responde 404', (await fetch(`${base}/downloads/catalogo-app.apk`)).status === 404);
 } catch (e) {
   ok('sem exceção', false, e.stack);
