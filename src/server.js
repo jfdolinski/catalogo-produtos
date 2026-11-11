@@ -62,7 +62,7 @@ const EXTRA_FIELDS = ['manufacturer', 'gross_weight', 'net_weight', 'height', 'w
   'ncm', 'cest', 'cfop', 'tax_origin', 'cst_icms', 'icms_rate', 'cst_ipi', 'ipi_rate', 'cst_pis', 'pis_rate', 'cst_cofins', 'cofins_rate', 'tax_notes', ...REFORM_FIELDS,
   'anvisa_registry', 'med_type', 'med_stripe', 'med_controlled', 'med_form', 'med_presentation', 'med_therapeutic_class', 'med_notes'];
 
-// Carrega códigos e imagens de vários produtos de uma vez (em blocos, por limite de parâmetros do SQLite)
+// Carrega códigos e imagens de vários produtos de uma vez (em blocos de 500, para a consulta não ficar enorme)
 async function hydrate(products, base) {
   const settings = getSettings();
   const barcodes = [];
@@ -689,7 +689,7 @@ admin.get('/products', async (req, res) => {
 admin.get('/products/:id', async (req, res) => {
   const p = await getProduct(req.params.id, baseUrl(req));
   if (!p) throw new HttpError(404, 'Produto não encontrado');
-  p.requests = await db.prepare('SELECT * FROM barcode_requests WHERE product_id = ? ORDER BY first_requested_at').all(p.id);
+  p.requests = await db.prepare('SELECT * FROM barcode_requests WHERE product_id = ? ORDER BY first_requested_at, code').all(p.id);
   p.merges = await mergeHistory(p.id);
   const af = await db.prepare("SELECT source, fields, filled_at FROM autofill_log WHERE product_id = ? AND source <> ''").get(p.id);
   p.autofill = af ? { source: af.source, fields: JSON.parse(af.fields), filled_at: iso(af.filled_at) } : null;
@@ -816,7 +816,7 @@ admin.post('/merge', async (req, res) => {
 
   removedFiles.forEach(removeImageFile);
   const p = await getProduct(targetId, base);
-  p.requests = await db.prepare('SELECT * FROM barcode_requests WHERE product_id = ? ORDER BY first_requested_at').all(targetId);
+  p.requests = await db.prepare('SELECT * FROM barcode_requests WHERE product_id = ? ORDER BY first_requested_at, code').all(targetId);
   p.merges = await mergeHistory(targetId);
   res.json({ merged: sourceIds, product: p });
 });
@@ -915,7 +915,7 @@ admin.get('/pending', async (req, res) => {
     SELECT r.*, p.name AS product_name FROM barcode_requests r
     LEFT JOIN products p ON p.id = r.product_id
     ${status ? 'WHERE r.status = ?' : ''}
-    ORDER BY r.status = 'pendente' DESC, r.request_count DESC, r.last_requested_at DESC`).all(...(status ? [status] : []));
+    ORDER BY r.status = 'pendente' DESC, r.request_count DESC, r.last_requested_at DESC, r.code`).all(...(status ? [status] : []));
   const pendingCount = (await db.prepare("SELECT COUNT(*) AS n FROM barcode_requests WHERE status = 'pendente'").get()).n;
   res.json({ pending: pendingCount, items: rows });
 });
@@ -1017,7 +1017,7 @@ admin.get('/dashboard', async (req, res) => {
     top_pending: (await db.prepare(`
       SELECT r.code, r.request_count, r.last_source, r.last_requested_at, r.product_id, p.name
       FROM barcode_requests r JOIN products p ON p.id = r.product_id
-      WHERE r.status = 'pendente' ORDER BY r.request_count DESC, r.last_requested_at DESC LIMIT 8`).all())
+      WHERE r.status = 'pendente' ORDER BY r.request_count DESC, r.last_requested_at DESC, r.code LIMIT 8`).all())
       .map((r) => ({ ...r, last_requested_at: iso(r.last_requested_at) })),
     recent_updates: (await db.prepare(`SELECT id, name, updated_at, created_at FROM products ORDER BY updated_at DESC, id DESC LIMIT 8`).all())
       .map((r) => ({ ...r, updated_at: iso(r.updated_at), created_at: iso(r.created_at) })),
@@ -1704,10 +1704,19 @@ if (!(await db.prepare("SELECT 1 FROM settings WHERE key = 'migr_imagem_padrao_u
   });
 }
 
-app.listen(PORT, HOST, () => {
+const httpServer = app.listen(PORT, HOST, () => {
   const where = process.env.PUBLIC_BASE_URL || `http://${HOST || 'localhost'}:${PORT}`;
   console.log(`Repositório de produtos rodando em ${HOST || '*'}:${PORT}`);
   console.log(`Painel: ${where}/`);
   // Em produção o token não vai para o log; fica em DATA_DIR/config.json
   if (process.env.NODE_ENV !== 'production') console.log(`Token de administração: ${ADMIN_TOKEN}`);
 });
+
+// No container o Node é o processo principal: sem isto, parar o serviço espera o tempo limite e mata no meio de uma gravação
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    console.log(`${signal}: encerrando`);
+    httpServer.close(() => db.end().finally(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 10000).unref();
+  });
+}

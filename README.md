@@ -3,53 +3,65 @@
 Cadastro central de produtos com **várias imagens** e **vários códigos de barras** por item,
 que gera **links públicos** (JSON, CSV, página e imagem direta) para outros sistemas usarem como catálogo.
 
-- Node.js ≥ 22.13 (usa o SQLite embutido do Node, sem banco externo)
-- Dados em `data/`: `catalogo.db` (banco), `images/` (arquivos), `config.json` (token)
+- Node.js ≥ 22.13 e **PostgreSQL** (`DATABASE_URL`)
+- Arquivos em `data/`: `images/` (fotos) e `config.json` (token de administração, se não vier de `ADMIN_TOKEN`)
 
 ## Rodar
 
 ```bash
 npm install
-npm start
+npm run db:local        # PostgreSQL local (PGlite) na porta 5433, dados em data/pg-local; deixe aberto
+DATABASE_URL=postgres://postgres@localhost:5433/postgres npm start
 ```
 
 - **Painel:** http://localhost:3000/ (também em `/admin/`). Pede login; no primeiro acesso, use o token de
   administração, que aparece no terminal ao iniciar e fica salvo em `data/config.json`.
 - **Consulta pública, sem login:** http://localhost:3000/consulta/
+- **Testes:** `npm test` (cada arquivo sobe o catálogo com um PostgreSQL descartável; nada toca em dados reais).
 
 ### Variáveis de ambiente
 
-| Variável          | Padrão     | Uso                                                                 |
-|-------------------|------------|---------------------------------------------------------------------|
-| `PORT`            | `3000`     | Porta HTTP                                                          |
-| `PUBLIC_BASE_URL` | host atual | Base usada nos links gerados (ex.: `https://catalogo.suaempresa.com`) |
-| `ADMIN_TOKEN`     | gerado     | Substitui o token salvo em `data/config.json`                        |
-| `DATA_DIR`        | `data`     | Pasta do banco e das imagens                                         |
-| `AUTO_CADASTRO`   | ligado     | `0` desliga o cadastro automático de códigos não encontrados         |
+| Variável          | Padrão              | Uso                                                                  |
+|-------------------|---------------------|----------------------------------------------------------------------|
+| `DATABASE_URL`    | —                   | Conexão do PostgreSQL (obrigatória)                                  |
+| `PORT`            | `3000`              | Porta HTTP                                                           |
+| `PUBLIC_BASE_URL` | host atual          | Base usada nos links gerados (ex.: `https://catalogo.suaempresa.com`) |
+| `ADMIN_TOKEN`     | gerado              | Substitui o token salvo em `data/config.json`                         |
+| `DATA_DIR`        | `data`              | Pasta das imagens e do `config.json`                                 |
+| `APP_TZ`          | `America/Sao_Paulo` | Fuso do "hoje" (dashboard, estatísticas por dia, prazos)             |
+| `DB_POOL_MAX`     | `10`                | Conexões simultâneas com o banco                                     |
+| `AUTO_CADASTRO`   | ligado              | `0` desliga o cadastro automático de códigos não encontrados          |
+| `CATALOGO_CACHE_SEGUNDOS` | `300`       | Validade do catálogo completo em memória                             |
+| `MIGRAR_SQLITE`   | —                   | Caminho do `catalogo.db` antigo: com o PostgreSQL vazio, copia tudo ao iniciar |
 
-## Produção (VPS)
+### Banco de dados
+
+O esquema fica em `src/schema.sql` e é aplicado a cada início (só cria o que falta). As consultas usam a forma do SQLite,
+e `src/db.js` traduz o que difere: parâmetros `?`, `datetime('now', ...)`/`date(...)` (funções `sqlite_datetime`/`sqlite_date`
+no banco), `INSERT OR IGNORE`, `COLLATE NOCASE` e `LIKE` sem diferenciar maiúsculas. Datas ficam como texto UTC
+(`AAAA-MM-DD HH:MM:SS`). Transações: `await tx(async () => ...)`.
+
+**Migração do SQLite:** `DATABASE_URL=... node scripts/migrar-sqlite.mjs data/catalogo.db`, ou `MIGRAR_SQLITE` ao subir.
+Só roda com o PostgreSQL sem produtos, é tudo ou nada, confere a contagem de cada tabela e guarda uma cópia do arquivo
+SQLite antes (`catalogo.db.antes-postgres-<data>`).
+
+## Produção (Easypanel)
 
 Publicado em **https://catalogo.b6nhiy.easypanel.host/** (VPS `212.85.12.23`, Ubuntu 24.04 com Easypanel).
+Código em **github.com/jfdolinski/catalogo-produtos** (privado).
 
-| Item            | Onde                                                                 |
-|-----------------|----------------------------------------------------------------------|
-| Código          | `/opt/catalogo/app` (versão anterior em `/opt/catalogo/app.old`)      |
-| Dados           | `/opt/catalogo/data` (banco, imagens, `config.json` com o token)      |
-| Serviço         | `systemctl status catalogo` · logs: `journalctl -u catalogo -f`       |
-| Rede            | escuta só em `172.17.0.1:8091` (não exposto à internet)               |
-| Domínio/HTTPS   | `/etc/easypanel/traefik/config/catalogo.yaml` (Let's Encrypt)         |
+| Item          | Onde                                                                                         |
+|---------------|----------------------------------------------------------------------------------------------|
+| Banco         | serviço PostgreSQL do Easypanel; a URL interna vai em `DATABASE_URL` do app                   |
+| App           | app do Easypanel construído pelo `Dockerfile` do repositório, porta 3000, **1 réplica**       |
+| Imagens       | volume montado em `/app/data`                                                                |
+| Domínio/HTTPS | configurado no app do Easypanel                                                              |
 
-Publicar atualizações de código (os dados da VPS são mantidos):
+Publicar: envie ao GitHub e clique em **Deploy** no app (ou ligue o deploy automático).
+`node deploy/verificar.mjs https://catalogo.b6nhiy.easypanel.host data/config.json` testa o sistema publicado.
 
-```powershell
-.\deploy\publicar.ps1
-```
-
-- `-ComDados` envia banco/imagens locais, usados só se a VPS ainda não tiver dados; `-ForcarDados` sobrescreve
-  (os dados anteriores ficam em `/opt/catalogo/data.bak-<data>`).
-- `node deploy/verificar.mjs https://catalogo.b6nhiy.easypanel.host data/config.json` testa o sistema publicado.
-- `deploy/remoto.ps1 -Comando '...'` roda um comando na VPS; `deploy/inspecionar-vps.sh` é um diagnóstico só de leitura.
-- Para usar outro domínio: aponte o DNS para a VPS e rode `.\deploy\publicar.ps1 -Dominio novo.dominio.com`.
+Os scripts `deploy/publicar.ps1` e `deploy/instalar.sh` são da instalação anterior (serviço `systemd` com SQLite) e ficam só para
+voltar atrás, se for preciso.
 
 ## Dashboard (página inicial)
 

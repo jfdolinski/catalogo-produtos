@@ -144,6 +144,22 @@ export async function tx(fn) {
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)));
 await pool.query(fs.readFileSync(path.join(ROOT, 'schema.sql'), 'utf8'));
 
+// Migração a partir do SQLite antigo: com MIGRAR_SQLITE apontando para o arquivo e o PostgreSQL sem produtos.
+// Se falhar, o serviço não sobe (melhor que subir vazio); nada é gravado pela metade.
+if (process.env.MIGRAR_SQLITE) {
+  const empty = !(await pool.query('SELECT 1 FROM products LIMIT 1')).rows.length;
+  if (empty && fs.existsSync(process.env.MIGRAR_SQLITE)) {
+    const { migrateFromSqlite } = await import('./migrate-sqlite.js');
+    console.log(`Migrando os dados de ${process.env.MIGRAR_SQLITE} para o PostgreSQL...`);
+    await migrateFromSqlite(process.env.MIGRAR_SQLITE, pool);
+    console.log('Migração concluída. A variável MIGRAR_SQLITE já pode ser removida.');
+  } else if (!empty) {
+    console.log('MIGRAR_SQLITE ignorada: o PostgreSQL já tem dados. A variável pode ser removida.');
+  } else {
+    throw new Error(`MIGRAR_SQLITE aponta para um arquivo que não existe: ${process.env.MIGRAR_SQLITE}`);
+  }
+}
+
 // Parâmetros e valores padrão (em dias; 0 = sem prazo)
 export const SETTINGS_DEFAULTS = {
   prazo_cadastro_dias: 180,

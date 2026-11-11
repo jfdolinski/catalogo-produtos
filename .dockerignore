@@ -1,0 +1,9 @@
+node_modules
+data
+relatorios
+tests
+deploy
+scripts
+.git
+.claude
+*.md

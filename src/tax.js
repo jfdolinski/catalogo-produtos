@@ -271,7 +271,7 @@ export function mountTax(admin) {
   });
 
   admin.get('/tax-classes', async (_req, res) => {
-    res.json(await Promise.all((await db.prepare('SELECT * FROM tax_classes ORDER BY active DESC, name COLLATE NOCASE').all()).map(classOut)));
+    res.json(await Promise.all((await db.prepare('SELECT * FROM tax_classes ORDER BY active DESC, name COLLATE NOCASE, id').all()).map(classOut)));
   });
 
   const nameTaken = async (name, id) => await db.prepare('SELECT 1 FROM tax_classes WHERE name = ? AND id <> ?').get(name, id ?? -1);

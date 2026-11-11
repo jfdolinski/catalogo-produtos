@@ -130,7 +130,7 @@ export async function replaceProductDcb(productId, list) {
   return true;
 }
 
-// Princípios ativos de vários produtos de uma vez (ids: até 500, limite de parâmetros do SQLite)
+// Princípios ativos de vários produtos de uma vez (ids: até 500 por consulta)
 export const activesOf = async ids => await db.prepare(`
   SELECT pd.product_id, d.id, d.code, d.name, d.cas, pd.concentration FROM product_dcb pd JOIN dcb d ON d.id = pd.dcb_id
   WHERE pd.product_id IN (${ids.map(() => '?').join(',')}) ORDER BY pd.position, d.id`).all(...ids);
@@ -181,7 +181,7 @@ export function mountDcb(admin, sheetUpload) {
     const total = (await db.prepare(`SELECT COUNT(*) AS n FROM dcb d ${sql}`).get(...params)).n;
     // Quem começa com o texto digitado vem primeiro
     const rows = await db.prepare(`SELECT d.*, (SELECT COUNT(*) FROM product_dcb pd WHERE pd.dcb_id = d.id) AS products FROM dcb d ${sql}
-      ORDER BY ${q ? '(d.search LIKE ?) DESC, ' : ''}d.name COLLATE NOCASE LIMIT ? OFFSET ?`)
+      ORDER BY ${q ? '(d.search LIKE ?) DESC, ' : ''}d.name COLLATE NOCASE, d.id LIMIT ? OFFSET ?`)
       .all(...params, ...(q ? [`${q}%`] : []), limit, (page - 1) * limit);
     res.json({ total, page, limit, items: rows.map(dcbOut) });
   });

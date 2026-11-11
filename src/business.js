@@ -10,7 +10,7 @@ export class HttpError extends Error {
 
 export { tx };
 
-// Datas do SQLite ('AAAA-MM-DD HH:MM:SS', UTC) -> ISO
+// Datas do banco ('AAAA-MM-DD HH:MM:SS', UTC) -> ISO
 export const iso = (s) => (s ? new Date(s.replace(' ', 'T') + 'Z').toISOString() : null);
 const money = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const str = (v, max = 300) => String(v ?? '').trim().slice(0, max);
@@ -86,7 +86,7 @@ export function mountBusiness(admin) {
   });
 
   admin.get('/users', async (_req, res) => {
-    res.json({ modules: MODULES, items: (await db.prepare(`SELECT ${USER_FIELDS} FROM users ORDER BY name COLLATE NOCASE`).all()).map(userOut) });
+    res.json({ modules: MODULES, items: (await db.prepare(`SELECT ${USER_FIELDS} FROM users ORDER BY name COLLATE NOCASE, id`).all()).map(userOut) });
   });
 
   function cleanUser(b, isNew) {
@@ -150,7 +150,7 @@ export function mountBusiness(admin) {
     companies: (await db.prepare('SELECT COUNT(*) AS n FROM companies WHERE plan_id = ?').get(p.id)).n
   });
 
-  admin.get('/plans', async (_req, res) => res.json(await Promise.all((await db.prepare('SELECT * FROM plans ORDER BY active DESC, monthly, name').all()).map(planOut))));
+  admin.get('/plans', async (_req, res) => res.json(await Promise.all((await db.prepare('SELECT * FROM plans ORDER BY active DESC, monthly, name, id').all()).map(planOut))));
 
   function cleanPlan(b, isNew) {
     const out = {};
@@ -276,7 +276,7 @@ export function mountBusiness(admin) {
     }
     if (STATUSES.includes(req.query.status)) { where.push('status = ?'); params.push(req.query.status); }
     const rows = await db.prepare(`SELECT * FROM companies ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY status = 'ativa' DESC, COALESCE(NULLIF(nome_fantasia, ''), razao_social) COLLATE NOCASE`).all(...params);
+      ORDER BY status = 'ativa' DESC, COALESCE(NULLIF(nome_fantasia, ''), razao_social) COLLATE NOCASE, id`).all(...params);
     res.json({ items: await Promise.all(rows.map(companyOut)) });
   });
 
@@ -338,7 +338,7 @@ export function mountBusiness(admin) {
   // Resumo do período: consumo e valor estimado de cada empresa, com a fatura se já foi gerada
   admin.get('/billing', async (req, res) => {
     const period = validPeriod(req.query.period) || currentPeriod();
-    const companies = await db.prepare("SELECT * FROM companies WHERE status <> 'cancelada' OR id IN (SELECT company_id FROM invoices WHERE period = ?) ORDER BY COALESCE(NULLIF(nome_fantasia, ''), razao_social) COLLATE NOCASE").all(period);
+    const companies = await db.prepare("SELECT * FROM companies WHERE status <> 'cancelada' OR id IN (SELECT company_id FROM invoices WHERE period = ?) ORDER BY COALESCE(NULLIF(nome_fantasia, ''), razao_social) COLLATE NOCASE, id").all(period);
     const items = await Promise.all(companies.map(async c => {
       const plan = c.plan_id ? await db.prepare('SELECT * FROM plans WHERE id = ?').get(c.plan_id) : null;
       const inv = await db.prepare('SELECT * FROM invoices WHERE company_id = ? AND period = ?').get(c.id, period);
