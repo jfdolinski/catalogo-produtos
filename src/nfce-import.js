@@ -253,9 +253,27 @@ function majority(votes) {
   return { value: best?.value ?? '', conflict: count.size > 1 };
 }
 
+// Todos os códigos de barras em memória: o plano consulta milhares deles, e uma ida ao banco por código ficaria lenta.
+// Mesma regra de findBarcode no servidor: o código exato ou o mesmo GTIN com outra quantidade de zeros à esquerda.
+async function barcodeIndex() {
+  const rows = await db.all('SELECT b.code, b.product_id, p.active FROM barcodes b JOIN products p ON p.id = b.product_id');
+  const byCode = new Map(rows.map((r) => [r.code, r]));
+  return (code) => {
+    const exact = byCode.get(code);
+    const base = code.replace(/^0+/, '');
+    if (exact || !/^\d+$/.test(code) || base.length < 7) return exact;
+    for (const c of [base, ...[8, 12, 13, 14].map((n) => base.padStart(n, '0'))]) {
+      const r = byCode.get(c);
+      if (r) return r;
+    }
+    return undefined;
+  };
+}
+
 // Monta o plano a partir das notas lidas e dos dados de notas anteriores. Não grava.
 async function buildPlan(lines, opts, deps) {
-  const { findBarcode, AUTO_NAME } = deps;
+  const { AUTO_NAME } = deps;
+  const findBarcode = await barcodeIndex();
   const stats = { conflicts: 0, kept_different: 0, simples_ignored: 0, new_barcodes: 0, barcode_conflicts: 0 };
 
   // Código -> produto. Código sem cadastro vira "novo:<código>", com o outro código da mesma nota no mesmo item.

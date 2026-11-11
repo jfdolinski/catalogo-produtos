@@ -153,26 +153,30 @@ async function hydrate(products, base) {
 }
 
 // Condições SQL de prazo vencido (dados ou imagens), conforme os parâmetros
+// Momento em UTC (texto como nas colunas) da meia-noite local de hoje deslocada em N dias, calculado uma vez por consulta
+const localMidnight = (days = 0) => `(SELECT datetime('now', 'localtime', 'start of day', '${days >= 0 ? '+' : ''}${days} days', 'utc'))`;
+
 function overdueSql(group) {
   const s = getSettings();
   const parts = [];
-  if (s.prazo_cadastro_dias && group !== 'images') parts.push(`COALESCE(p.data_updated_at, p.created_at) < datetime('now', '-${Number(s.prazo_cadastro_dias)} days')`);
-  if (s.prazo_imagens_dias && group !== 'data') parts.push(`COALESCE(p.images_updated_at, p.created_at) < datetime('now', '-${Number(s.prazo_imagens_dias)} days')`);
-  return parts.length ? `(${parts.join(' OR ')})` : '0';
+  if (s.prazo_cadastro_dias && group !== 'images') parts.push(`COALESCE(p.data_updated_at, p.created_at) < (SELECT datetime('now', '-${Number(s.prazo_cadastro_dias)} days'))`);
+  if (s.prazo_imagens_dias && group !== 'data') parts.push(`COALESCE(p.images_updated_at, p.created_at) < (SELECT datetime('now', '-${Number(s.prazo_imagens_dias)} days'))`);
+  return parts.length ? `(${parts.join(' OR ')})` : 'FALSE';
 }
 
 // Prazo (dados ou imagens) que vence entre hoje e hoje + days-1, em data local
+// O prazo vence entre hoje e hoje + days-1 (data local) quando a última revisão caiu entre
+// a meia-noite local de (hoje - prazo) e a de (hoje + days - prazo)
 function dueWithinSql(days) {
   const s = getSettings();
-  const due = (col, n) => `date(COALESCE(${col}, p.created_at), '+${Number(n)} days', 'localtime')`;
-  const range = (expr) => `(${expr} BETWEEN date('now', 'localtime') AND date('now', 'localtime', '+${days - 1} days'))`;
+  const range = (col, n) => `(COALESCE(${col}, p.created_at) >= ${localMidnight(-Number(n))} AND COALESCE(${col}, p.created_at) < ${localMidnight(days - Number(n))})`;
   const parts = [];
-  if (s.prazo_cadastro_dias) parts.push(range(due('p.data_updated_at', s.prazo_cadastro_dias)));
-  if (s.prazo_imagens_dias) parts.push(range(due('p.images_updated_at', s.prazo_imagens_dias)));
-  return parts.length ? `(${parts.join(' OR ')})` : '0';
+  if (s.prazo_cadastro_dias) parts.push(range('p.data_updated_at', s.prazo_cadastro_dias));
+  if (s.prazo_imagens_dias) parts.push(range('p.images_updated_at', s.prazo_imagens_dias));
+  return parts.length ? `(${parts.join(' OR ')})` : 'FALSE';
 }
 
-const TODAY = "date('now', 'localtime')";
+const TODAY = "(SELECT date('now', 'localtime'))";
 const PENDING_SQL = "EXISTS (SELECT 1 FROM barcode_requests r WHERE r.product_id = p.id AND r.status = 'pendente')";
 // Foto real = nem imagem padrão nem ilustração gerada por IA
 const NO_REAL_IMAGE_SQL = 'NOT EXISTS (SELECT 1 FROM images i WHERE i.product_id = p.id AND i.is_placeholder = 0 AND i.is_ai = 0)';
@@ -183,8 +187,8 @@ const LIST_FILTERS = {
   overdue: () => overdueSql(),
   due_today: () => dueWithinSql(1),
   due_week: () => dueWithinSql(7),
-  created_today: () => `date(p.created_at, 'localtime') = ${TODAY}`,
-  updated_today: () => `date(p.updated_at, 'localtime') = ${TODAY} AND date(p.created_at, 'localtime') < ${TODAY}`,
+  created_today: () => `p.created_at >= ${localMidnight(0)}`,
+  updated_today: () => `p.updated_at >= ${localMidnight(0)} AND p.created_at < ${localMidnight(0)}`,
   no_image: () => NO_REAL_IMAGE_SQL,
   inactive: () => 'p.active = 0',
   no_ncm: () => "p.ncm = ''",

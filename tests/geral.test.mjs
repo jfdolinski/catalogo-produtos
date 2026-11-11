@@ -174,6 +174,29 @@ try {
   const pe = (await (await fetch(`${base}/api/v1/barcodes/${E}`)).json());
   ok('vínculo gravado', pe.ncm === '33049910' && pe.tax_class?.name === 'Lista positiva', [pe.ncm, pe.tax_class]);
 
+  // ---- Prazos na fronteira (data local de São Paulo; prazo de dados em 90 dias, definido acima; imagens sem prazo)
+  await api('PUT', '/api/admin/settings', { prazo_imagens_dias: 0 });
+  const mk = async (name, ts) => (await sql(`INSERT INTO products (name, created_at, updated_at, data_updated_at) VALUES ($1, $2, $2, $2) RETURNING id`, name, ts))[0].id;
+  // Meia-noite local de hoje em UTC, para montar datas exatas
+  const [{ m }] = await sql(`SELECT sqlite_datetime('now', 'localtime', 'start of day', 'utc') AS m`);
+  const at = (days, hours = 0) => new Date(Date.parse(`${m.replace(' ', 'T')}Z`) + (days * 24 + hours) * 3600000).toISOString().slice(0, 19).replace('T', ' ');
+  const venceHoje = await mk('vence hoje', at(-90, 1));
+  const venceAmanha = await mk('vence amanhã', at(-89, 1));
+  const venceuOntem = await mk('venceu ontem', at(-91, 1));
+  const ultimoMinuto = await mk('revisado na meia-noite que vence amanhã', at(-89, 0));
+  const idsOf = async (flt) => (await api('GET', `/api/admin/product-ids?${flt}=1`)).b.ids;
+  const hoje = await idsOf('due_today');
+  const semana = await idsOf('due_week');
+  const vencidos = await idsOf('overdue');
+  ok('vence hoje', hoje.includes(venceHoje) && !hoje.includes(venceAmanha) && !hoje.includes(venceuOntem), hoje);
+  ok('vence na semana inclui hoje e amanhã', semana.includes(venceHoje) && semana.includes(venceAmanha) && !semana.includes(venceuOntem), semana);
+  ok('vencido', vencidos.includes(venceuOntem) && !vencidos.includes(venceAmanha), vencidos);
+  ok('meia-noite seguinte já é amanhã', !hoje.includes(ultimoMinuto) && semana.includes(ultimoMinuto));
+  const ontemLocal = await mk('criado ontem', at(-1, 23));
+  const created = await idsOf('created_today');
+  ok('cadastrado hoje usa a data local', created.includes(venceHoje) === false && !created.includes(ontemLocal), created.length);
+  for (const id of [venceHoje, venceAmanha, venceuOntem, ultimoMinuto, ontemLocal]) await api('DELETE', `/api/admin/products/${id}`);
+
   // ---- Exclusão e resumo da limpeza
   ok('exclui produto', (await api('DELETE', `/api/admin/products/${pe.id}`)).s === 204 && (await api('GET', `/api/admin/products/${pe.id}`)).s === 404);
   ok('resumo da limpeza de espaços', (await api('GET', '/api/admin/text-cleanup')).s === 200);
@@ -182,7 +205,8 @@ try {
   const errs = st.logs().split('\n').filter((l) => /error|erro/i.test(l) && !/Token de/.test(l));
   ok('sem erro no servidor', !errs.length, errs.slice(0, 5).join(' | '));
   const rows = await sql('SELECT COUNT(*)::int AS n FROM products');
-  ok('consulta direta no banco de teste', rows[0].n >= 3);
+  // Restam a Dipirona (com o Paracetamol mesclado) e o cadastro automático; o da planilha foi excluído
+  ok('consulta direta no banco de teste', rows[0].n === 2, rows[0].n);
 } catch (e) {
   ok('execução', false, e.stack);
 } finally {
