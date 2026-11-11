@@ -4,7 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useCameraPermissions } from 'expo-camera';
-import { apagarSessao, clienteDa, ErroApi, lerSessao, versaoPublicada, type Produto, type Sessao } from './api';
+import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, versaoPublicada, type Produto, type Sessao } from './api';
 import { LeitorCodigo } from './LeitorCodigo';
 import { codigoDeBarras, gtinValido, versaoMaisNova } from './regras';
 import { TelaFotos } from './TelaFotos';
@@ -59,7 +59,7 @@ type Tela =
   | { qual: 'buscando'; codigo: string }
   | { qual: 'novo'; codigo: string }
   | { qual: 'fotos'; produto: Produto }
-  | { qual: 'enviando'; produto: Produto; total: number }
+  | { qual: 'enviando'; produto: Produto; total: number; feitas: number }
   | { qual: 'produto'; produto: Produto; aviso?: string | null };
 
 function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: string | null) => void }) {
@@ -118,16 +118,21 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
     }
   }
 
-  async function enviar(produto: Produto, uris: string[]) {
-    setTela({ qual: 'enviando', produto, total: uris.length });
+  async function enviar(produto: Produto, uris: string[], jaEnviadas = 0) {
+    const total = jaEnviadas + uris.length;
+    setTela({ qual: 'enviando', produto, total, feitas: jaEnviadas });
     try {
-      const atualizado = await api.enviarFotos(produto.id, uris);
-      setTela({ qual: 'produto', produto: { ...atualizado, pending: produto.pending }, aviso: `${uris.length} foto${uris.length > 1 ? 's enviadas' : ' enviada'}.` });
+      const atualizado = await api.enviarFotos(produto.id, uris, (n) => setTela({ qual: 'enviando', produto, total, feitas: jaEnviadas + n }));
+      setTela({ qual: 'produto', produto: { ...atualizado, pending: produto.pending }, aviso: `${total} foto${total > 1 ? 's enviadas' : ' enviada'}.` });
     } catch (e) {
-      // As fotos ficam no aparelho só nesta tela: avisa e deixa tentar de novo
-      Alert.alert('Fotos não enviadas', e instanceof ErroApi ? e.message : 'Falha no envio.', [
-        { text: 'Descartar', style: 'destructive', onPress: () => setTela({ qual: 'produto', produto }) },
-        { text: 'Tentar de novo', onPress: () => void enviar(produto, uris) },
+      // As fotos ficam no aparelho só nesta tela: avisa e deixa tentar de novo só as que faltam
+      const enviadas = e instanceof ErroEnvio ? e.enviadas : 0;
+      const faltam = uris.slice(enviadas);
+      const atual = async () => (enviadas || jaEnviadas ? ((await api.produto(produto.id).catch(() => null)) ?? produto) : produto);
+      const parte = enviadas + jaEnviadas ? `${enviadas + jaEnviadas} de ${total} já foram enviadas. ` : '';
+      Alert.alert('Fotos não enviadas', `${parte}${e instanceof ErroApi ? e.message : 'Falha no envio.'}`, [
+        { text: 'Descartar', style: 'destructive', onPress: () => void atual().then((p) => setTela({ qual: 'produto', produto: { ...p, pending: produto.pending } })) },
+        { text: `Tentar de novo (${faltam.length})`, onPress: () => void enviar(produto, faltam, jaEnviadas + enviadas) },
       ]);
     }
   }
@@ -176,7 +181,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
       ) : tela.qual === 'enviando' ? (
         <View style={estilos.centro}>
           <ActivityIndicator size="large" color={cores.marca} />
-          <Text style={estilos.texto}>Enviando {tela.total} foto{tela.total > 1 ? 's' : ''} de {tela.produto.name}…</Text>
+          <Text style={estilos.texto}>Enviando foto {Math.min(tela.feitas + 1, tela.total)} de {tela.total}: {tela.produto.name}…</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">

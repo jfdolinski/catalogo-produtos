@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { File, UploadType } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { Sugestao } from './regras';
+
+/** Lado maior das fotos enviadas: nítido para o catálogo e leve na rede móvel (de ~4 MB para ~300 KB). */
+const LADO_MAXIMO = 1600;
 
 export interface Usuario {
   id: number;
@@ -71,6 +76,32 @@ export class ErroApi extends Error {
 /** Sem internet ou servidor fora: não é motivo para desvincular o celular. */
 export const semConexao = (e: unknown) => e instanceof ErroApi && e.status === 0;
 
+/** Falha no meio de um envio de várias fotos: as `enviadas` primeiras já estão no catálogo. */
+export class ErroEnvio extends ErroApi {
+  constructor(
+    status: number,
+    mensagem: string,
+    readonly enviadas: number,
+  ) {
+    super(status, mensagem);
+  }
+}
+
+/** Reduz a foto da câmera para JPEG de no máximo LADO_MAXIMO px no lado maior. */
+async function reduzir(uri: string): Promise<string> {
+  const contexto = ImageManipulator.manipulate(uri);
+  const original = await contexto.renderAsync();
+  const maior = Math.max(original.width, original.height);
+  const imagem =
+    maior > LADO_MAXIMO
+      ? await ImageManipulator.manipulate(uri)
+          .resize(original.width >= original.height ? { width: LADO_MAXIMO } : { height: LADO_MAXIMO })
+          .renderAsync()
+      : original;
+  const salva = await imagem.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+  return salva.uri;
+}
+
 async function pedir<T>(servidor: string, caminho: string, opcoes: { metodo?: string; corpo?: unknown; form?: FormData; token?: string; limiteMs?: number }): Promise<T> {
   const controle = new AbortController();
   const limite = setTimeout(() => controle.abort(), opcoes.limiteMs ?? 60_000);
@@ -87,7 +118,7 @@ async function pedir<T>(servidor: string, caminho: string, opcoes: { metodo?: st
       body: opcoes.form ?? (opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo)),
     });
   } catch {
-    throw new ErroApi(0, 'Sem conexão com o servidor. Confira a internet e tente de novo.');
+    throw new ErroApi(0, controle.signal.aborted ? 'O servidor demorou demais para responder. Tente de novo.' : 'Sem conexão com o servidor. Confira a internet e tente de novo.');
   } finally {
     clearTimeout(limite);
   }
@@ -123,6 +154,7 @@ export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
   }
   return {
     eu: () => chamar<{ user: Usuario }>('/me'),
+    produto: (id: number) => chamar<Produto>(`/products/${id}`),
     porCodigo: (codigo: string) => chamar<{ found: boolean; code: string; product?: Produto }>(`/code/${encodeURIComponent(codigo)}`),
     sugestoes: (codigo: string, cosmos: 'cache' | 'only' = 'cache') =>
       chamar<{ cosmos_available: boolean; results: Sugestao[] }>(`/lookup/${encodeURIComponent(codigo)}?cosmos=${cosmos}`),
@@ -133,14 +165,48 @@ export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
     fotoDaUrl: (id: number, url: string) => chamar<{ product: Produto }>(`/products/${id}/images/from-url`, { metodo: 'POST', corpo: { url } }),
     ordenar: (id: number, ids: number[]) => chamar<Produto>(`/products/${id}/images/order`, { metodo: 'PUT', corpo: { ids } }),
     apagarFoto: (imagemId: number) => chamar<Produto>(`/images/${imagemId}`, { metodo: 'DELETE' }),
-    /** Fotos tiradas na câmera (arquivos locais do aparelho), enviadas de uma vez. */
-    enviarFotos: (id: number, uris: string[]) => {
-      const form = new FormData();
-      uris.forEach((uri, i) => {
-        // No React Native o arquivo vai por { uri, name, type }; o servidor aceita jpeg, png e webp.
-        form.append('images', { uri, name: `foto-${Date.now()}-${i + 1}.jpg`, type: 'image/jpeg' } as unknown as Blob);
-      });
-      return chamar<Produto>(`/products/${id}/images`, { metodo: 'POST', form, limiteMs: 180_000 });
+    /**
+     * Fotos tiradas na câmera (arquivos locais do aparelho): cada uma é reduzida e enviada pelo módulo nativo
+     * de arquivos, uma por vez. O fetch do React Native com FormData falhava no Android ("sem conexão").
+     * Se uma falhar, ErroEnvio diz quantas já foram, para tentar de novo só as que faltam.
+     */
+    enviarFotos: async (id: number, uris: string[], aoProgresso?: (enviadas: number) => void): Promise<Produto> => {
+      let produto: Produto | null = null;
+      for (const [i, uri] of uris.entries()) {
+        aoProgresso?.(i);
+        let arquivo: string;
+        try {
+          arquivo = await reduzir(uri);
+        } catch {
+          throw new ErroEnvio(-1, `Não foi possível preparar a foto ${i + 1}. Tire de novo.`, i);
+        }
+        let r: { status: number; body: string };
+        try {
+          r = await new File(arquivo).upload(`${sessao.servidor}/api/admin/products/${id}/images`, {
+            httpMethod: 'POST',
+            uploadType: UploadType.MULTIPART,
+            fieldName: 'images',
+            mimeType: 'image/jpeg',
+            headers: { Authorization: `Bearer ${sessao.token}`, Accept: 'application/json' },
+          });
+        } catch (e) {
+          const detalhe = e instanceof Error && e.message ? ` (${e.message.slice(0, 120)})` : '';
+          throw new ErroEnvio(0, `Falha de rede ao enviar a foto ${i + 1} de ${uris.length}. Confira a internet e tente de novo.${detalhe}`, i);
+        }
+        let dados: (Produto & { error?: string }) | null = null;
+        try {
+          dados = JSON.parse(r.body);
+        } catch {
+          /* resposta sem JSON (proxy) */
+        }
+        if (r.status === 401) aoExpirar();
+        if (r.status < 200 || r.status >= 300 || !dados) {
+          throw new ErroEnvio(r.status, dados?.error || `Erro ${r.status} ao enviar a foto ${i + 1}.`, i);
+        }
+        produto = dados;
+      }
+      aoProgresso?.(uris.length);
+      return produto!;
     },
     desvincular: () => chamar<void>('/me/device', { metodo: 'DELETE' }),
   };
