@@ -27,11 +27,15 @@ Os testes do servidor para o app ficam em `tests/app.test.mjs` (raiz do projeto)
 
 ## Como o APK nasce e vai para o ar
 
-1. Suba `version` em `package.json` quando for versão nova (o app compara com a publicada e avisa).
+1. Suba `version` em `package.json` quando for versão nova. Mesmo sem subir, cada compilação tem número próprio (`versionCode`), e o app compara versão e compilação com a publicada.
 2. O workflow **Aplicativo** (`.github/workflows/aplicativo.yml`) roda a cada push em `main` que mexe em `app/` (ou à mão, em Actions). Ele compila, instala num emulador, confere que abre e publica uma Release `app-<versão>-<execução>`.
 3. Para colocar no ar: `.\deploy\publicar-app.ps1 -Tag app-1.0.0-3` (sem `-Tag`: a mais recente). O APK vai para `/opt/catalogo/data/downloads` e fica em `/downloads/catalogo-app.apk`; o painel mostra o botão de download na janela do aplicativo.
 
 Não é preciso Android SDK na máquina.
+
+## Atualização automática
+
+Ao abrir (e sempre que volta para a frente), o app confere `/downloads/app-versao.txt`. Se a publicada for mais nova, baixa o APK sozinho e abre o instalador do Android: o usuário só toca em **Atualizar**. Na primeira vez o Android pede para permitir instalar apps desta origem. Não dá para pular essa confirmação fora da Play Store. A atualização mantém o vínculo do celular, desde que o APK novo seja assinado com a mesma chave.
 
 ## Chave de assinatura (uma vez)
 

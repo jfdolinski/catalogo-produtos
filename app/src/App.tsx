@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useCameraPermissions } from 'expo-camera';
-import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, versaoPublicada, type Produto, type Sessao } from './api';
+import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, type Produto, type Sessao } from './api';
+import { baixarEInstalar, versaoInstalada, versaoNova } from './atualizacao';
 import { LeitorCodigo } from './LeitorCodigo';
-import { codigoDeBarras, gtinValido, versaoMaisNova } from './regras';
+import { codigoDeBarras, gtinValido } from './regras';
 import { TelaFotos } from './TelaFotos';
 import { TelaNovo } from './TelaNovo';
 import { TelaProduto } from './TelaProduto';
@@ -68,18 +69,40 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   const [digitado, setDigitado] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [resumo, setResumo] = useState<string | null>(null);
-  const [novaVersao, setNovaVersao] = useState<string | null>(null);
+  // Atualização: versão nova encontrada, baixando, instalador aberto ou falha
+  const [atualizacao, setAtualizacao] = useState<{ versao: string; estado: 'baixando' | 'instalador' | 'erro'; detalhe?: string } | null>(null);
+  const baixando = useRef(false);
   const [permissao, pedirPermissao] = useCameraPermissions();
 
-  // Confere o vínculo ao abrir (sem internet não desvincula) e se há versão nova do app no servidor
+  const atualizar = useCallback(async (versao: string) => {
+    if (baixando.current) return;
+    baixando.current = true;
+    setAtualizacao({ versao, estado: 'baixando' });
+    try {
+      await baixarEInstalar(sessao.servidor, versao);
+      setAtualizacao({ versao, estado: 'instalador' });
+    } catch (e) {
+      setAtualizacao({ versao, estado: 'erro', detalhe: e instanceof Error ? e.message : String(e) });
+    } finally {
+      baixando.current = false;
+    }
+  }, [sessao.servidor]);
+
+  // Confere o vínculo ao abrir (sem internet não desvincula). Versão nova do app: baixa e abre o instalador
+  // sozinho, ao abrir e sempre que o app volta para a frente.
   useEffect(() => {
     api.eu().catch(() => undefined);
-    void versaoPublicada(sessao.servidor).then((v) => {
-      const atual = Constants.expoConfig?.version ?? '0';
-      const numero = v?.split('-')[0];
-      if (numero && versaoMaisNova(numero, atual)) setNovaVersao(numero);
-    });
-  }, [api, sessao.servidor]);
+    const conferir = () => {
+      if (Platform.OS !== 'android') return;
+      void versaoNova(sessao.servidor).then((v) => {
+        if (v) void atualizar(v);
+        else setAtualizacao(null);
+      });
+    };
+    conferir();
+    const s = AppState.addEventListener('change', (estado) => estado === 'active' && conferir());
+    return () => s.remove();
+  }, [api, sessao.servidor, atualizar]);
 
   /** Pede a permissão da câmera quando preciso; false = negada (o erro já fica na tela). */
   async function temCamera(): Promise<boolean> {
@@ -185,9 +208,15 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
         </View>
       ) : (
         <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
-          {novaVersao ? (
-            <Pressable onPress={() => void Linking.openURL(`${sessao.servidor}/downloads/catalogo-app.apk`)}>
-              <Alerta tipo="aviso">Versão {novaVersao} do aplicativo disponível. Toque para baixar.</Alerta>
+          {atualizacao ? (
+            <Pressable disabled={atualizacao.estado === 'baixando'} onPress={() => void atualizar(atualizacao.versao)}>
+              <Alerta tipo="aviso">
+                {atualizacao.estado === 'baixando'
+                  ? `Baixando a versão ${atualizacao.versao} do aplicativo…`
+                  : atualizacao.estado === 'instalador'
+                    ? `Versão ${atualizacao.versao}: toque em Atualizar na tela do Android. Se ela fechou, toque aqui.`
+                    : `Não foi possível atualizar para a versão ${atualizacao.versao} (${atualizacao.detalhe}). Toque para tentar de novo.`}
+              </Alerta>
             </Pressable>
           ) : null}
           {resumo ? <Alerta tipo="ok">{resumo}</Alerta> : null}
@@ -216,7 +245,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
             </View>
           </View>
           {tela.qual === 'buscando' ? <Text style={estilos.ajuda}>Buscando {tela.codigo}…</Text> : null}
-          <Text style={[estilos.ajuda, { marginTop: 24 }]}>Versão {Constants.expoConfig?.version ?? ''}</Text>
+          <Text style={[estilos.ajuda, { marginTop: 24 }]}>Versão {versaoInstalada()}</Text>
         </ScrollView>
       )}
     </View>

@@ -49,3 +49,12 @@ test('foto principal e versões', () => {
   assert.equal(versaoMaisNova('1.0.0', '1.0.0'), false);
   assert.equal(versaoMaisNova('x', '1.0.0'), false);
 });
+
+test('versão publicada com número da compilação', () => {
+  // atualizacao.ts compara "1.0.1-5" como "1.0.1.5"
+  const comp = (a: string, b: string) => versaoMaisNova(a.replace('-', '.'), b.replace('-', '.'));
+  assert.equal(comp('1.0.1-6', '1.0.1-5'), true, 'mesma versão, compilação nova');
+  assert.equal(comp('1.0.2-1', '1.0.1-9'), true);
+  assert.equal(comp('1.0.1-5', '1.0.1-5'), false);
+  assert.equal(comp('1.0.0-2', '1.0.1-3'), false);
+});
