@@ -79,7 +79,7 @@ jobs:
       - name: Libera espaço para o emulador
         run: |
           df -h / | tail -1
-          rm -rf android node_modules ~/.gradle ~/.npm
+          rm -rf android node_modules ~/.gradle
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules "$ANDROID_HOME/ndk"
           docker system prune -af >/dev/null 2>&1 || true
           df -h / | tail -1
