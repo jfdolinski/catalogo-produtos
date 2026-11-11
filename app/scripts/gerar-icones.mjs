@@ -1,11 +1,8 @@
-// Desenha os ícones do aplicativo em código, uma etiqueta branca com código de barras sobre verde.
+// Desenha os ícones do aplicativo em código: a marca 03 "Lente" (canvas Marca do Catálogo).
 //   node scripts/gerar-icones.mjs
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const AZUL = [0x15, 0x80, 0x3d, 255]; // verde: diferente do Flow
-const BRANCO = [255, 255, 255, 255];
-const PRETO = [0x0f, 0x17, 0x2a, 255];
 const NADA = [0, 0, 0, 0];
 
 function crc32(b) {
@@ -40,15 +37,31 @@ function png(lado, cor) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), bloco('IHDR', ihdr), bloco('IDAT', deflateSync(linhas)), bloco('IEND', Buffer.alloc(0))]);
 }
 
-const BARRAS = [[0.34, 0.015], [0.365, 0.03], [0.41, 0.015], [0.44, 0.04], [0.495, 0.015], [0.525, 0.03], [0.57, 0.015], [0.6, 0.04], [0.655, 0.015]];
+// Marca 03 "Lente": anel verde, miolo verde com código de barras e o ponto do flash, sobre azul-noite.
+// Coordenadas no desenho de 120 x 120 da marca (como no SVG), escaladas para o ícone.
+const BARRAS = [[40, 4], [48, 8], [60, 4], [68, 6], [77, 3]];
+const VERDE = [0x22, 0xc5, 0x5e, 255];
+const CLARO = [0xf8, 0xfa, 0xfc, 255];
 
-function etiqueta(x, y) {
-  const dentro = x > 0.24 && x < 0.76 && y > 0.3 && y < 0.7;
-  if (!dentro) return null;
-  const barra = y > 0.38 && y < 0.62 && BARRAS.some(([i, l]) => x >= i && x < i + l);
-  return barra ? PRETO : BRANCO;
+// escala: o símbolo ocupa `tamanho` (fração do ícone) centrado
+function lente(tamanho, fundo) {
+  return (x, y) => {
+    const u = ((x - 0.5) / tamanho) * 120 + 60;
+    const v = ((y - 0.5) / tamanho) * 120 + 60;
+    const d = Math.hypot(u - 60, v - 60);
+    if (Math.hypot(u - 92, v - 26) <= 6) return CLARO;
+    if (d >= 52 && d <= 60) return VERDE;
+    if (d <= 38) {
+      const barra = v >= 44 && v <= 76 && BARRAS.some(([i, l]) => u >= i && u < i + l);
+      return barra ? FUNDO : VERDE;
+    }
+    return fundo;
+  };
 }
 
+const FUNDO = [0x0f, 0x17, 0x2a, 255];
 mkdirSync('assets', { recursive: true });
-writeFileSync('assets/icone.png', png(1024, (x, y) => etiqueta(x, y) ?? AZUL));
-writeFileSync('assets/icone-frente.png', png(1024, (x, y) => etiqueta(x, y) ?? NADA));
+// Ícone comum: o símbolo inteiro sobre o fundo azul-noite
+writeFileSync('assets/icone.png', png(1024, lente(0.78, FUNDO)));
+// Ícone adaptável (Android): só o símbolo, dentro da área segura (o sistema recorta em círculo ou gota)
+writeFileSync('assets/icone-frente.png', png(1024, lente(0.56, NADA)));

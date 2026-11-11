@@ -26,7 +26,7 @@ module.exports = {
     android: {
       package: 'br.com.catalogo.app',
       versionCode,
-      adaptiveIcon: { foregroundImage: './assets/icone-frente.png', backgroundColor: '#15803d' },
+      adaptiveIcon: { foregroundImage: './assets/icone-frente.png', backgroundColor: '#0f172a' },
       // REQUEST_INSTALL_PACKAGES: abrir o instalador do Android com a versão nova (atualização automática)
       permissions: ['android.permission.CAMERA', 'android.permission.REQUEST_INSTALL_PACKAGES'],
       blockedPermissions: ['android.permission.RECORD_AUDIO'],

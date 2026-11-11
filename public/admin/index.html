@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Repositório de Produtos</title>
+  <link rel="icon" href="marca.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,6 +12,7 @@
   <section id="login" class="login hidden">
     <div class="login-box">
       <form id="login-form" class="card">
+        <img src="marca.svg" alt="" class="login-logo" width="72" height="72">
         <h1>Repositório de Produtos</h1>
         <p id="login-first" class="muted small hidden">Nenhum usuário cadastrado ainda: entre com o <strong>token de administração</strong>
           e crie os usuários em <strong>Usuários</strong>.</p>
@@ -33,7 +35,7 @@
   <div id="app" class="app hidden">
     <header class="topbar">
       <div class="brand">
-        <strong>Repositório de Produtos</strong>
+        <strong class="brand-name"><img src="marca.svg" alt="" class="brand-logo" width="28" height="28">Repositório de Produtos</strong>
         <nav class="views">
           <a href="#/" data-view="dashboard" data-perm="dashboard">Dashboard</a>
           <a href="#/produtos" data-view="produtos" data-perm="produtos">Produtos</a>
