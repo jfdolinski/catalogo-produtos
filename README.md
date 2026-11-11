@@ -217,6 +217,14 @@ e cole a chave da API. Se quiser, troque o modelo; os padrões são `gpt-image-1
   - `POST /api/admin/products/{id}/images/ai` com `{ name?, brand?, unit?, category?, description? }`.
 - As variáveis `IA_OPENAI_URL` e `IA_GEMINI_URL` permitem trocar o endereço das APIs, por exemplo para usar um proxy.
 
+## Aplicativo de celular (Android)
+
+Atualiza cadastros pela câmera do celular: lê o código de barras; se o produto existe, a câmera abre para as fotos (depois dá para conferir nome e marca, escolher a foto principal e marcar como revisado); se não existe, mostra o que as bases públicas sabem e cadastra na hora. Código em `app/` (Expo, mesma base do app Flow); detalhes em [app/README.md](app/README.md).
+
+- **Vínculo:** no painel, **📱 Aplicativo** (no alto) mostra um QR code de uso único, válido por 10 minutos. O app troca o código por um token de aparelho, que vale como o login do usuário (mesmas permissões: módulo Atualização ou Produtos) até ser desvinculado na mesma janela, pelo **Sair** do app, ou o usuário ser desativado.
+- **Rotas:** `POST /api/admin/me/app-link` (gera o código e o QR), `GET /api/admin/me/devices` e `DELETE /api/admin/me/devices/:id` (aparelhos do usuário), `GET /api/admin/users/:id/devices` e `DELETE /api/admin/users/:id/devices/:aparelho` (administração de usuários), `POST /api/app/link` (o app troca o código pelo token), `DELETE /api/admin/me/device` (o app se desvincula) e `GET /api/admin/code/:codigo` (produto pelo código de barras, aceitando UPC-A de 12 dígitos para EAN-13 com zero; não conta como consulta nem cadastra).
+- **Download:** o APK é gerado pelo workflow **Aplicativo** do GitHub e posto no ar com `deploy/publicar-app.ps1`, que o copia para `DATA_DIR/downloads`; fica em `/downloads/catalogo-app.apk` e o painel mostra o botão de download.
+
 ## Tratamento automático de espaços
 
 Todo texto que entra ou é atualizado fica sem espaço no início e no fim, e com um só espaço entre as palavras. Vale para o painel e a API

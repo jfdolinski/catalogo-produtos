@@ -15,6 +15,7 @@ import { mountNfceImport } from './nfce-import.js';
 import { mountCatalog } from './catalog-cache.js';
 import { cleanBody, cleanField, cleanLine } from './text.js';
 import { textCleanupSummary } from './text-cleanup.js';
+import { mountAppDevices, DOWNLOADS_DIR } from './app-devices.js';
 import { analyzeBarcode } from './barcode.js';
 import { readSpreadsheet, FIELD_LABELS } from './importer.js';
 import { providers, lookupOne } from './lookup.js';
@@ -628,6 +629,8 @@ app.get('/api/consulta', async (req, res) => {
 });
 
 app.use('/consulta', express.static(path.join(ROOT, 'public', 'consulta')));
+// APK do aplicativo e a versão publicada (gravados em DATA_DIR/downloads ao publicar o app)
+app.use('/downloads', express.static(DOWNLOADS_DIR, { maxAge: 0 }));
 
 // ---------------------------------------------------------------------------
 // Login do painel
@@ -680,10 +683,25 @@ admin.get('/check', (req, res) => res.json({ ok: true, user: req.user }));
 admin.get('/text-cleanup', async (_req, res) => res.json(await textCleanupSummary())); // sem regra de permissão: só administrador
 mountBusiness(admin);
 mountTax(admin);
+mountAppDevices(app, admin, baseUrl);
 
 admin.get('/products', async (req, res) => {
   const r = await searchProducts(req.query);
   res.json({ total: r.total, page: r.page, limit: r.limit, items: await hydrate(r.rows, baseUrl(req)) });
+});
+
+// Aplicativo: produto pelo código de barras lido na câmera ou digitado. Não conta como consulta nem cadastra.
+// O leitor pode entregar o UPC-A com 12 dígitos para um código guardado como EAN-13 (com zero à esquerda), e vice-versa.
+admin.get('/code/:code', async (req, res) => {
+  const code = cleanLine(req.params.code);
+  if (!/^\d{6,14}$/.test(code)) throw new HttpError(400, 'Informe um código de barras numérico');
+  const variants = [...new Set([code, code.padStart(13, '0'), code.padStart(14, '0'), code.replace(/^0+(?=\d{8})/, '')])];
+  const hit = await db.prepare(`SELECT product_id FROM barcodes WHERE code IN (${variants.map(() => '?').join(',')})
+    ORDER BY code = ? DESC, product_id LIMIT 1`).get(...variants, code);
+  if (!hit) return res.json({ found: false, code });
+  const p = await getProduct(hit.product_id, baseUrl(req));
+  p.pending = (await db.prepare("SELECT COUNT(*) AS n FROM barcode_requests WHERE product_id = ? AND status = 'pendente'").get(p.id)).n > 0;
+  res.json({ found: true, code, product: p });
 });
 
 admin.get('/products/:id', async (req, res) => {

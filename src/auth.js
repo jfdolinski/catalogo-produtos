@@ -51,12 +51,25 @@ export function publicUser(u) {
 
 const MASTER = { id: 0, name: 'Administrador (token)', login: '', is_admin: 1, active: 1, master: true };
 
+// Token de celular vinculado (app-devices.js): vale como o login do usuário dono do aparelho
+export const APP_TOKEN_PREFIX = 'app_';
+
+async function authenticateDevice(token) {
+  const h = sha256(token);
+  const row = await db.get(`SELECT u.*, d.id AS device_id FROM app_devices d JOIN users u ON u.id = d.user_id
+    WHERE d.token_hash = ? AND d.revoked_at IS NULL AND u.active = 1`, h);
+  if (!row) return null;
+  await db.run("UPDATE app_devices SET last_seen = datetime('now') WHERE token_hash = ? AND last_seen < datetime('now', '-5 minutes')", h);
+  return { ...publicUser(row), device_id: row.device_id };
+}
+
 // Token do header -> usuário (ou null)
 export async function authenticate(token) {
   if (!token) return null;
   if (token.length === ADMIN_TOKEN.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(ADMIN_TOKEN))) {
     return publicUser(MASTER);
   }
+  if (token.startsWith(APP_TOKEN_PREFIX)) return authenticateDevice(token);
   const row = await db.get(`SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND u.active = 1`, sha256(token));
   if (!row) return null;
@@ -85,7 +98,7 @@ const RULES = [
   [null, /^\/(companies|cnpj)(\/|$)/, ['empresas']],
   [null, /^\/(plans|invoices|billing)(\/|$)/, ['cobranca']],
   [null, /^\/users(\/|$)/, ['usuarios']],
-  [null, /^\/(products|barcodes|images|pending|product-ids)(\/|$)/, ['produtos', 'atualizacao']],
+  [null, /^\/(products|barcodes|images|pending|product-ids|code)(\/|$)/, ['produtos', 'atualizacao']],
 ];
 
 export function allowed(user, method, path) {

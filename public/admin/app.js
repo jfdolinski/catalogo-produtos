@@ -58,8 +58,9 @@ async function tryLogin(token, errorText = 'Sessão expirada; entre de novo') {
     $('#login').classList.add('hidden');
     $('#app').classList.remove('hidden');
     $('#user-name').textContent = r.user.name;
+    document.querySelectorAll('[data-perm]').forEach((el) => el.classList.toggle('hidden', !can(el.dataset.perm.split(','))));
     $('#change-password').classList.toggle('hidden', r.user.master);
-    document.querySelectorAll('[data-perm]').forEach((el) => el.classList.toggle('hidden', !can(el.dataset.perm)));
+    if (r.user.master) $('#open-app-link').classList.add('hidden');
     applyRoute();
     if (can('produtos') || can('atualizacao')) { loadList(); loadCategories(); window.loadTaxClasses?.(); }
   } catch {
@@ -129,6 +130,71 @@ $('#password-form').addEventListener('submit', async (e) => {
     alert('Senha alterada.');
   } catch (err) { $('#password-msg').textContent = err.message; $('#password-msg').className = 'msg error'; }
 });
+
+// ---------------------------------------------------------------- Aplicativo do celular (vínculo por QR code)
+const appLink = { timer: null };
+
+function stopAppTimer() { clearInterval(appLink.timer); appLink.timer = null; }
+
+async function loadAppDevices() {
+  const box = $('#app-devices');
+  try {
+    const r = await api('GET', '/api/admin/me/devices');
+    box.innerHTML = r.items.length ? `<table class="dash-table"><tbody>${r.items.map((d) => `
+      <tr><td><strong>${esc(d.name)}</strong><div class="muted">vinculado em ${fmtDay(d.created_at)} · usado em ${fmtDate(d.last_seen)}${d.app_version ? ` · versão ${esc(d.app_version)}` : ''}</div></td>
+      <td style="text-align:right"><button type="button" class="link" data-unlink="${d.id}">Desvincular</button></td></tr>`).join('')}</tbody></table>`
+      : '<p class="muted">Nenhum celular vinculado.</p>';
+    box.querySelectorAll('[data-unlink]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Desvincular este celular? Ele precisará ler um QR code novo para voltar a funcionar.')) return;
+      try { await api('DELETE', `/api/admin/me/devices/${b.dataset.unlink}`); loadAppDevices(); }
+      catch (err) { setAppMsg(err.message, 'error'); }
+    }));
+    const dl = $('#app-download');
+    dl.classList.toggle('hidden', !r.app);
+    if (r.app) dl.innerHTML = `<p><a class="button" href="${esc(r.app.url)}" download>⬇ Baixar o aplicativo (Android, versão ${esc(r.app.version)})</a></p>`;
+  } catch (err) { box.innerHTML = `<p class="msg error">${esc(err.message)}</p>`; }
+}
+
+function setAppMsg(text, kind = '') { $('#app-msg').textContent = text; $('#app-msg').className = `msg ${kind}`; }
+
+async function newAppCode() {
+  stopAppTimer();
+  setAppMsg('');
+  try {
+    const r = await api('POST', '/api/admin/me/app-link');
+    $('#app-qr').innerHTML = r.qr_svg;
+    $('#app-code').textContent = r.code.replace(/(.{5})/, '$1 ');
+    $('#app-server').textContent = `Endereço: ${r.server}`;
+    $('#app-new-code').textContent = 'Gerar outro';
+    const end = Date.now() + r.minutes * 60000;
+    const tick = () => {
+      const left = Math.max(0, Math.round((end - Date.now()) / 1000));
+      $('#app-expire').textContent = left ? `Vale por ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} e uma vez só.` : 'Código vencido. Gere outro.';
+      $('#app-qr').classList.toggle('expired', !left);
+      if (!left) stopAppTimer();
+      // Quando o celular usa o código, a lista de vinculados muda: confere de vez em quando
+      if (left && left % 5 === 0) loadAppDevices();
+    };
+    tick();
+    appLink.timer = setInterval(tick, 1000);
+  } catch (err) { setAppMsg(err.message, 'error'); }
+}
+
+$('#open-app-link').addEventListener('click', () => {
+  $('#app-qr').innerHTML = '';
+  $('#app-code').textContent = '';
+  $('#app-server').textContent = '';
+  $('#app-expire').textContent = '';
+  $('#app-new-code').textContent = 'Gerar QR code';
+  setAppMsg('');
+  $('#app-devices').innerHTML = '<p class="muted">Carregando…</p>';
+  $('#app-dialog').showModal();
+  loadAppDevices();
+  newAppCode();
+});
+$('#app-new-code').addEventListener('click', newAppCode);
+$('#app-close').addEventListener('click', () => $('#app-dialog').close());
+$('#app-dialog').addEventListener('close', stopAppTimer);
 
 // ---------------------------------------------------------------- Lista (carregamento progressivo)
 const PAGE_SIZE = 100;

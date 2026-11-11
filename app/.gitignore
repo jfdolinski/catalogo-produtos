@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+# Gerados por `expo prebuild` no CI.
+android/
+ios/
+# Chave de assinatura: nunca no repositório.
+*.jks
+*.p12
+*.keystore

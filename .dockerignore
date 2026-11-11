@@ -7,3 +7,5 @@ scripts
 .git
 .claude
 *.md
+app
+.github

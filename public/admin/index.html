@@ -53,6 +53,7 @@
         <span class="user-menu">
           <span id="user-name" class="muted small"></span>
           <button id="change-password" class="link small">Trocar senha</button>
+          <button id="open-app-link" class="link small" data-perm="atualizacao,produtos">📱 Aplicativo</button>
         </span>
         <button id="logout" class="link">Sair</button>
       </nav>
@@ -1239,6 +1240,30 @@
         <button value="ok" class="primary">Salvar</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="app-dialog" class="merge-dialog app-dialog">
+    <h2>Aplicativo do celular</h2>
+    <p class="muted small">Atualiza cadastros pelo celular: lê o código de barras e tira as fotos do produto. Funciona com o seu usuário e as suas permissões.</p>
+    <div id="app-download" class="hidden"></div>
+    <div class="app-link-box">
+      <div id="app-qr" class="app-qr"></div>
+      <div>
+        <ol class="small app-steps">
+          <li>Instale e abra o aplicativo no celular.</li>
+          <li>Toque em <strong>Ler QR code</strong> e aponte para o código ao lado.</li>
+          <li>Ou toque em <strong>Digitar o código</strong> e informe o endereço e o código abaixo.</li>
+        </ol>
+        <div class="app-code" id="app-code"></div>
+        <div class="muted small" id="app-server"></div>
+        <div class="muted small" id="app-expire"></div>
+        <button type="button" id="app-new-code">Gerar QR code</button>
+      </div>
+    </div>
+    <h3>Celulares vinculados</h3>
+    <div id="app-devices" class="small"></div>
+    <p id="app-msg" class="msg"></p>
+    <div class="merge-actions"><button type="button" id="app-close">Fechar</button></div>
   </dialog>
 
   <template id="barcode-row">
