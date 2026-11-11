@@ -1,0 +1,4 @@
+# Quebra de linha do Linux no repositório: o código roda em container Linux, e .sh com CRLF não executa
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary

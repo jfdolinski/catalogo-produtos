@@ -1,0 +1,1265 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Repositório de Produtos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login -->
+  <section id="login" class="login hidden">
+    <div class="login-box">
+      <form id="login-form" class="card">
+        <h1>Repositório de Produtos</h1>
+        <p id="login-first" class="muted small hidden">Nenhum usuário cadastrado ainda: entre com o <strong>token de administração</strong>
+          e crie os usuários em <strong>Usuários</strong>.</p>
+        <div id="login-user-fields" class="login-fields">
+          <input id="login-user" placeholder="Login" autocomplete="username">
+          <input id="login-pass" type="password" placeholder="Senha" autocomplete="current-password">
+        </div>
+        <div id="login-token-fields" class="login-fields hidden">
+          <input id="token" type="password" placeholder="Token de administração" autocomplete="off">
+        </div>
+        <button class="primary">Entrar</button>
+        <button type="button" id="login-switch" class="link small">Entrar com o token de administração</button>
+        <p id="login-error" class="error"></p>
+      </form>
+      <a href="/consulta/" class="login-public">🔎 Consultar produtos sem login →</a>
+    </div>
+  </section>
+
+  <!-- App -->
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div class="brand">
+        <strong>Repositório de Produtos</strong>
+        <nav class="views">
+          <a href="#/" data-view="dashboard" data-perm="dashboard">Dashboard</a>
+          <a href="#/produtos" data-view="produtos" data-perm="produtos">Produtos</a>
+          <a href="#/nomes" data-view="nomes" data-perm="produtos">Nomes</a>
+          <a href="#/atualizar" data-view="atualizar" data-perm="atualizacao">Atualização</a>
+          <a href="#/ncm" data-view="ncm" data-perm="ncm">NCM</a>
+          <a href="#/dcb" data-view="dcb" data-perm="dcb">DCB</a>
+          <a href="#/empresas" data-view="empresas" data-perm="empresas">Empresas</a>
+          <a href="#/cobranca" data-view="cobranca" data-perm="cobranca">Cobrança</a>
+          <a href="#/usuarios" data-view="usuarios" data-perm="usuarios">Usuários</a>
+        </nav>
+      </div>
+      <nav>
+        <button id="open-settings" class="link" data-perm="parametros">⚙ Parâmetros</button>
+        <a href="/consulta/" target="_blank">Consulta</a>
+        <a href="/api/v1/catalog.json" target="_blank">catalog.json</a>
+        <span class="user-menu">
+          <span id="user-name" class="muted small"></span>
+          <button id="change-password" class="link small">Trocar senha</button>
+        </span>
+        <button id="logout" class="link">Sair</button>
+      </nav>
+    </header>
+
+    <section id="no-access" class="page hidden">
+      <div class="empty">Seu usuário ainda não tem permissão para nenhum módulo. Peça a um administrador para liberar o acesso.</div>
+    </section>
+
+    <!-- Empresas -->
+    <section id="companies" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>Empresas</h1>
+          <div class="muted small">Clientes que usam o catálogo. Digite o CNPJ para buscar os dados automaticamente.</div>
+        </div>
+        <button type="button" id="co-new" class="primary">+ Nova empresa</button>
+      </div>
+      <div class="co-layout">
+        <div class="panel co-list-panel">
+          <div class="co-filters">
+            <input id="co-search" type="search" placeholder="Buscar por nome, CNPJ ou cidade">
+            <select id="co-status">
+              <option value="">Todas</option>
+              <option value="ativa">Ativas</option>
+              <option value="suspensa">Suspensas</option>
+              <option value="cancelada">Canceladas</option>
+            </select>
+          </div>
+          <ul id="co-list" class="co-list"></ul>
+        </div>
+        <div class="panel co-editor">
+          <div id="co-empty" class="empty">Selecione uma empresa ou cadastre uma nova.</div>
+          <form id="co-form" class="hidden" autocomplete="off">
+            <div class="editor-head">
+              <div>
+                <h2 id="co-title">Nova empresa</h2>
+                <div id="co-meta" class="muted small"></div>
+              </div>
+              <div class="actions">
+                <button type="button" id="co-delete" class="danger">Excluir</button>
+                <button class="primary">Salvar</button>
+              </div>
+            </div>
+            <p id="co-msg" class="msg"></p>
+
+            <div class="cnpj-row">
+              <label>CNPJ *
+                <input name="cnpj" id="co-cnpj" placeholder="00.000.000/0000-00" inputmode="numeric" maxlength="18" required>
+              </label>
+              <button type="button" id="co-fetch">🔎 Buscar dados</button>
+              <a id="co-sintegra" href="http://www.sintegra.gov.br/" target="_blank" rel="noopener" class="small">Abrir Sintegra (IE) ↗</a>
+            </div>
+            <p id="co-fetch-msg" class="muted small"></p>
+
+            <div class="grid">
+              <label class="span2">Razão social *<input name="razao_social" required></label>
+              <label>Nome fantasia<input name="nome_fantasia"></label>
+              <label>Situação na Receita<input name="situacao"></label>
+              <label>Inscrição estadual<input name="inscricao_estadual"></label>
+              <label>Situação da IE<input name="ie_situacao" placeholder="ex.: habilitada"></label>
+              <label>Abertura<input name="abertura" type="date"></label>
+              <label>Porte<input name="porte"></label>
+              <label class="span2">Natureza jurídica<input name="natureza_juridica"></label>
+              <label class="span2">Atividade principal (CNAE)<input name="cnae"></label>
+              <label class="span2">Logradouro<input name="logradouro"></label>
+              <label>Número<input name="numero"></label>
+              <label>Complemento<input name="complemento"></label>
+              <label>Bairro<input name="bairro"></label>
+              <label>CEP<input name="cep" inputmode="numeric"></label>
+              <label>Município<input name="municipio"></label>
+              <label>UF<input name="uf" maxlength="2"></label>
+              <label>Telefone<input name="telefone"></label>
+              <label>E-mail<input name="email" type="email"></label>
+            </div>
+
+            <section class="block">
+              <h3>Contato para cobrança</h3>
+              <div class="grid">
+                <label class="span2">Nome<input name="contato_nome"></label>
+                <label>E-mail<input name="contato_email" type="email"></label>
+                <label>Telefone<input name="contato_telefone"></label>
+              </div>
+            </section>
+
+            <section class="block">
+              <h3>Cobrança e acesso</h3>
+              <div class="grid">
+                <label>Plano<select name="plan_id" id="co-plan"></select></label>
+                <label>Dia de vencimento<input name="due_day" type="number" min="1" max="31" value="10"></label>
+                <label>Situação
+                  <select name="status">
+                    <option value="ativa">Ativa (API liberada)</option>
+                    <option value="suspensa">Suspensa (API bloqueada)</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </label>
+                <label class="span2">Observações<textarea name="notes" rows="2"></textarea></label>
+              </div>
+              <div id="co-key" class="co-key"></div>
+              <div id="co-usage" class="co-usage"></div>
+            </section>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- NCM -->
+    <section id="names" class="page hidden">
+      <div class="sheet-toolbar">
+        <h1>Nomes dos produtos</h1>
+        <input id="sheet-q" type="search" placeholder="Buscar por nome, código, marca ou princípio ativo" aria-label="Buscar produtos">
+        <select id="sheet-filter" aria-label="Filtrar produtos">
+          <option value="">Todos os produtos</option>
+          <option value="provisional">Com nome provisório</option>
+          <option value="pending">Pendentes</option>
+          <option value="inactive">Inativos</option>
+        </select>
+        <div class="actions">
+          <button type="button" id="sheet-undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled>↶</button>
+          <button type="button" id="sheet-redo" title="Refazer (Ctrl+Y)" aria-label="Refazer" disabled>↷</button>
+          <button type="button" id="sheet-discard" disabled>Descartar</button>
+          <button type="button" id="sheet-save" class="primary" title="Salvar (Ctrl+S)" disabled>Salvar</button>
+        </div>
+      </div>
+      <div class="sheet-formula">
+        <div id="sheet-box" class="sheet-box" aria-label="Célula atual"></div>
+        <span class="sheet-fx" aria-hidden="true">fx</span>
+        <input id="sheet-formula" aria-label="Conteúdo da célula atual" autocomplete="off">
+      </div>
+      <div id="sheet-scroll" class="sheet-scroll" tabindex="0" role="grid" aria-label="Planilha de nomes dos produtos" aria-colcount="6">
+        <div id="sheet-head" class="sheet-head" role="row"></div>
+        <div id="sheet-canvas" class="sheet-canvas">
+          <div id="sheet-rows" class="sheet-rows" role="rowgroup"></div>
+          <input id="sheet-editor" class="sheet-editor hidden" aria-label="Editar nome" autocomplete="off" spellcheck="false">
+          <p id="sheet-empty" class="sheet-empty muted hidden">Nenhum produto encontrado.</p>
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <span id="sheet-status" class="muted small" role="status"></span>
+        <span id="names-msg" class="msg" role="alert"></span>
+      </div>
+    </section>
+
+    <section id="ncm" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>NCM e regras tributárias</h1>
+          <div class="muted small">Configure a tributação no NCM e nas regras por estado e classificação; o produto herda ao receber o NCM.</div>
+        </div>
+      </div>
+      <div class="ncm-tabs">
+        <button type="button" data-ntab="ncm" class="active">NCM</button>
+        <button type="button" data-ntab="classes">Classificações tributárias</button>
+        <button type="button" data-ntab="import">Importar planilha</button>
+      </div>
+
+      <div data-npane="import" class="hidden">
+        <div class="panel ncm-import">
+          <div class="upd-toolbar">
+            <label>O que importar
+              <select id="ti-kind">
+                <option value="ncm">Cadastro de NCM</option>
+                <option value="link">Vínculo dos produtos (NCM, classificação e origem)</option>
+              </select>
+            </label>
+          </div>
+          <div data-ti="ncm">
+            <p class="small">Colunas: <code>ncm</code> e <code>descricao</code> (obrigatória nos novos); opcionais <code>cest</code>, <code>cst_ipi</code>, <code>ipi</code>, <code>cst_pis</code>, <code>pis</code>,
+              <code>cst_cofins</code>, <code>cofins</code> e <code>observacoes</code>. Linhas de capítulo ou posição, comuns nas tabelas oficiais, são ignoradas.
+              As regras por estado continuam sendo feitas na aba NCM. <a href="#" id="ti-model-ncm">Baixar modelo (CSV)</a></p>
+          </div>
+          <div data-ti="link" class="hidden">
+            <p class="small">Colunas: <code>codigo_barras</code> (ou <code>sku</code>) e ao menos uma destas: <code>ncm</code>, <code>classificacao</code> (nome ou código) e <code>origem</code> (0 a 8).
+              Produto não encontrado não é criado. <a href="#" id="ti-model-link">Baixar modelo (CSV)</a></p>
+            <div class="imp-options">
+              <label class="check"><input type="checkbox" id="ti-unregistered" checked> Vincular mesmo se o NCM ainda não estiver cadastrado</label>
+              <label class="check"><input type="checkbox" id="ti-create-classes"> Criar as classificações que ainda não existem</label>
+            </div>
+          </div>
+          <div id="ti-drop" class="dropzone">
+            Arraste o arquivo CSV ou Excel (.xlsx) aqui ou <label class="link">escolha o arquivo<input id="ti-file" type="file" accept=".csv,.xlsx,.txt" hidden></label>
+          </div>
+          <p class="muted small">Célula vazia não apaga o valor atual. Nada é gravado antes de você conferir a prévia e aplicar.</p>
+          <p id="ti-msg" class="msg"></p>
+          <div id="ti-preview" class="hidden">
+            <div class="imp-head">
+              <div>
+                <h2 id="ti-title"></h2>
+                <div id="ti-summary" class="imp-summary"></div>
+              </div>
+              <div class="actions">
+                <label id="ti-update-box" class="check"><input type="checkbox" id="ti-update" checked> Atualizar os que já existem</label>
+                <select id="ti-filter"></select>
+                <button type="button" id="ti-problems">Baixar linhas com problema</button>
+                <button type="button" id="ti-cancel">Cancelar</button>
+                <button type="button" id="ti-apply" class="primary">Aplicar importação</button>
+              </div>
+            </div>
+            <div class="imp-table-wrap"><table class="dash-table imp-table">
+              <thead id="ti-head"></thead>
+              <tbody id="ti-rows"></tbody>
+            </table></div>
+            <p id="ti-more" class="muted small"></p>
+          </div>
+        </div>
+      </div>
+
+      <div data-npane="ncm">
+        <div id="ncm-links" class="small ncm-links"></div>
+        <div class="co-layout">
+          <div class="panel co-list-panel">
+            <div class="co-filters">
+              <input id="ncm-q" type="search" placeholder="Buscar por código ou descrição">
+              <button type="button" id="ncm-new" class="primary">+ Novo</button>
+            </div>
+            <p id="ncm-count" class="muted small"></p>
+            <ul id="ncm-list" class="co-list"></ul>
+            <div id="ncm-more" class="list-more hidden"><button type="button" id="ncm-more-btn">Carregar mais</button></div>
+          </div>
+          <div class="panel co-editor">
+            <div id="ncm-empty" class="empty">Selecione um NCM ou cadastre um novo.</div>
+            <form id="ncm-form" class="hidden" autocomplete="off">
+              <div class="editor-head">
+                <div>
+                  <h2 id="ncm-title">Novo NCM</h2>
+                  <div id="ncm-meta" class="muted small"></div>
+                </div>
+                <div class="actions">
+                  <button type="button" id="ncm-delete" class="danger">Excluir</button>
+                  <button class="primary">Salvar</button>
+                </div>
+              </div>
+              <p id="ncm-msg" class="msg"></p>
+              <div class="grid">
+                <label>NCM *<input name="code" inputmode="numeric" placeholder="8 dígitos"></label>
+                <label>CEST padrão<input name="cest" inputmode="numeric" placeholder="7 dígitos"></label>
+                <label class="span2">Descrição *<input name="description"></label>
+              </div>
+              <h3 class="ncm-sub">Tributos federais padrão</h3>
+              <div class="grid">
+              <label>CST do IPI<input name="cst_ipi"></label>
+              <label>IPI (%)<input name="ipi_rate" inputmode="decimal"></label>
+              <label>CST do PIS<input name="cst_pis"></label>
+              <label>PIS (%)<input name="pis_rate" inputmode="decimal"></label>
+              <label>CST da COFINS<input name="cst_cofins"></label>
+              <label>COFINS (%)<input name="cofins_rate" inputmode="decimal"></label>
+              </div>
+              <h3 class="ncm-sub">Reforma tributária</h3>
+              <div class="grid" data-reform-fields></div>
+              <div class="grid" style="margin-top:12px">
+                <label class="span2">Observações<textarea name="notes" rows="2"></textarea></label>
+                <label class="check"><input type="checkbox" name="active" checked> Ativo (aparece como opção nos produtos)</label>
+              </div>
+            </form>
+
+            <section id="ncm-rules-block" class="block hidden">
+              <div class="tax-head">
+                <h3>Regras por estado e classificação</h3>
+                <button type="button" id="rule-new">+ Nova regra</button>
+              </div>
+              <div class="imp-table-wrap"><table class="dash-table rules-table">
+                <thead><tr><th>Estado</th><th>Classificação</th><th>CFOP</th><th>CST</th><th class="num">ICMS</th><th class="num">Red. base</th><th class="num">FCP</th><th class="num">MVA</th><th class="num">ICMS-ST</th><th>Outros</th><th></th></tr></thead>
+                <tbody id="rule-rows"></tbody>
+              </table></div>
+              <p class="muted small">Quando há mais de uma regra para o produto, cada campo vem da mais específica que o preenche:
+                todos os estados → todos os estados com a classificação → estado → estado com a classificação. Campo vazio herda do nível anterior.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div data-npane="classes" class="hidden">
+        <div class="panel">
+          <div class="tax-head">
+            <h2 style="margin:0">Classificações tributárias</h2>
+            <button type="button" id="class-new" class="primary">+ Nova classificação</button>
+          </div>
+          <p class="muted small">Use para separar produtos do mesmo NCM com tributação diferente, como lista positiva/negativa, monofásico ou substituição tributária.</p>
+          <table class="dash-table">
+            <thead><tr><th>Código</th><th>Nome</th><th>CST IBS/CBS</th><th>cClassTrib</th><th class="num">Produtos</th><th class="num">Regras</th><th></th></tr></thead>
+            <tbody id="class-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DCB -->
+    <section id="dcb" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>DCB — princípios ativos</h1>
+          <div class="muted small">Denominação Comum Brasileira: a lista usada na aba Medicamento do cadastro de produtos.</div>
+        </div>
+        <button type="button" id="dcb-new" class="primary">+ Nova DCB</button>
+      </div>
+
+      <div class="panel dcb-import">
+        <h2>Importar por arquivo</h2>
+        <p class="small">Envie um <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong> com a coluna do nome (<code>DCB</code>, <code>Denominação</code> ou <code>Nome</code>)
+          e, se houver, <code>Número DCB</code> e <code>CAS</code>. Títulos acima do cabeçalho são ignorados. Lista em PDF precisa ser salva antes como planilha.
+          <a href="#" id="dcb-model">Baixar modelo (CSV)</a></p>
+        <div id="dcb-drop" class="dropzone">
+          Arraste o arquivo aqui ou <label class="link">escolha o arquivo<input id="dcb-file" type="file" accept=".csv,.xlsx,.txt" hidden></label>
+        </div>
+        <p id="dcb-imp-msg" class="msg"></p>
+        <div id="dcb-preview" class="hidden">
+          <div class="imp-head">
+            <div>
+              <h2 id="dcb-imp-title"></h2>
+              <div id="dcb-imp-summary" class="imp-summary"></div>
+            </div>
+            <div class="actions">
+              <label class="check"><input type="checkbox" id="dcb-imp-update" checked> Atualizar as que já existem</label>
+              <select id="dcb-imp-filter">
+                <option value="">Todas as linhas</option>
+                <option value="create">Novas</option>
+                <option value="update">Atualizar</option>
+                <option value="unchanged">Sem mudança</option>
+                <option value="error">Com erro</option>
+              </select>
+              <button type="button" id="dcb-imp-cancel">Cancelar</button>
+              <button type="button" id="dcb-imp-apply" class="primary">Aplicar importação</button>
+            </div>
+          </div>
+          <div class="imp-table-wrap"><table class="dash-table imp-table">
+            <thead><tr><th>Linha</th><th>Ação</th><th>Número</th><th>Nome</th><th>CAS</th><th>Observação</th></tr></thead>
+            <tbody id="dcb-imp-rows"></tbody>
+          </table></div>
+          <p id="dcb-imp-more" class="muted small"></p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="co-filters">
+          <input id="dcb-q" type="search" placeholder="Buscar por nome, número ou CAS">
+          <select id="dcb-status">
+            <option value="">Todas</option>
+            <option value="1">Ativas</option>
+            <option value="0">Inativas</option>
+          </select>
+        </div>
+        <p id="dcb-count" class="muted small"></p>
+        <table class="dash-table">
+          <thead><tr><th>Número</th><th>Nome</th><th>CAS</th><th class="num">Produtos</th><th></th></tr></thead>
+          <tbody id="dcb-rows"></tbody>
+        </table>
+        <div id="dcb-more" class="list-more hidden"><button type="button" id="dcb-more-btn">Carregar mais</button></div>
+      </div>
+    </section>
+
+    <!-- Cobrança -->
+    <section id="billing" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>Cobrança</h1>
+          <div class="muted small">O consumo é contado pelas consultas à API feitas com a chave de cada empresa.</div>
+        </div>
+        <div class="actions">
+          <label>Mês <input id="bi-period" type="month"></label>
+          <button type="button" id="bi-generate" class="primary">Gerar faturas do mês</button>
+        </div>
+      </div>
+      <p id="bi-msg" class="msg"></p>
+      <div id="bi-cards" class="cards"></div>
+      <div class="panel" style="margin-top:12px">
+        <h2>Empresas no mês</h2>
+        <div class="imp-table-wrap"><table class="dash-table bi-table">
+          <thead><tr><th>Empresa</th><th>Plano</th><th class="num">Consultas</th><th class="num">Excedente</th><th class="num">Valor</th><th>Fatura</th><th></th></tr></thead>
+          <tbody id="bi-rows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <div class="dash-head" style="margin:0 0 8px">
+          <h2 style="margin:0">Planos</h2>
+          <button type="button" id="pl-new">+ Novo plano</button>
+        </div>
+        <table class="dash-table">
+          <thead><tr><th>Plano</th><th class="num">Mensalidade</th><th class="num">Consultas incluídas</th><th class="num">Por consulta extra</th><th class="num">Empresas</th><th></th></tr></thead>
+          <tbody id="pl-rows"></tbody>
+        </table>
+        <p class="muted small">Valor da fatura = mensalidade + (consultas acima das incluídas × valor por consulta extra). Use 0 em "por consulta extra" para cobrança fixa.</p>
+      </div>
+    </section>
+
+    <!-- Usuários -->
+    <section id="users" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>Usuários e permissões</h1>
+          <div class="muted small">A tela de <a href="/consulta/" target="_blank">consulta</a> é pública. Os demais módulos exigem login e a permissão marcada aqui.</div>
+        </div>
+        <button type="button" id="us-new" class="primary">+ Novo usuário</button>
+      </div>
+      <p id="us-msg" class="msg"></p>
+      <div class="panel">
+        <table class="dash-table">
+          <thead><tr><th>Nome</th><th>Login</th><th>Permissões</th><th>Último acesso</th><th></th></tr></thead>
+          <tbody id="us-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="dashboard" class="dashboard">
+      <div class="dash-head">
+        <div>
+          <h1>Dashboard</h1>
+          <div id="dash-updated" class="muted small"></div>
+        </div>
+        <button type="button" id="dash-refresh">↻ Atualizar</button>
+      </div>
+      <div id="dash-cards" class="cards"></div>
+      <div class="dash-panels">
+        <section class="panel">
+          <h2>Conexões mais utilizadas</h2>
+          <div class="dash-filter">
+            <label>Período
+              <select id="dash-period">
+                <option value="1">Hoje</option>
+                <option value="7" selected>Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="0">Todo o período</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </label>
+            <label>De<input id="dash-from" type="date"></label>
+            <label>Até<input id="dash-to" type="date"></label>
+          </div>
+          <div id="dash-period-error" class="dash-filter-error" role="alert" hidden></div>
+          <div id="dash-sources"></div>
+        </section>
+        <section class="panel">
+          <h2>Pendentes mais consultados</h2>
+          <div id="dash-pending"></div>
+        </section>
+        <section class="panel">
+          <h2>Últimas atualizações</h2>
+          <div id="dash-recent"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="update" class="update">
+      <div class="dash-head">
+        <div>
+          <h1>Atualização de cadastros</h1>
+          <div class="muted small">Revise pendentes um a um, importe planilhas ou preencha automaticamente por bases externas.</div>
+        </div>
+      </div>
+      <div class="upd-tabs">
+        <button type="button" data-tab="queue" class="active">Fila de atualização</button>
+        <button type="button" data-tab="import">Importar planilha</button>
+        <button type="button" data-tab="xml">Importar XML</button>
+        <button type="button" data-tab="auto">Busca automática</button>
+      </div>
+
+      <!-- Fila -->
+      <div class="upd-pane" data-pane="queue">
+        <div class="upd-toolbar">
+          <label>Itens
+            <select id="q-source">
+              <option value="pending">Pendentes (mais consultados primeiro)</option>
+              <option value="overdue">Vencidos</option>
+              <option value="due_week">Vencendo em 7 dias</option>
+              <option value="no_image">Sem foto real</option>
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label class="check" title="As respostas ficam guardadas: reabrir o mesmo código não consulta de novo. A Cosmos só é consultada pelo botão, para poupar a franquia diária.">
+            <input type="checkbox" id="q-auto-lookup" checked> Buscar nas bases públicas ao abrir cada item (Cosmos só no botão)</label>
+          <button type="button" id="q-start" class="primary">Iniciar fila</button>
+          <span id="q-progress" class="muted"></span>
+        </div>
+        <div id="q-empty" class="empty">Escolha quais itens revisar e clique em <strong>Iniciar fila</strong>.</div>
+        <div id="q-item" class="q-item hidden">
+          <div class="q-media">
+            <div id="q-images" class="q-images"></div>
+            <div id="q-drop" class="dropzone small">
+              Arraste, <strong>cole (Ctrl+V)</strong> ou <label class="link">escolha imagens<input id="q-file" type="file" accept="image/*" multiple hidden></label>
+            </div>
+            <div class="q-url">
+              <input id="q-url" placeholder="ou cole aqui a URL de uma imagem">
+              <button type="button" id="q-url-add">Adicionar</button>
+            </div>
+            <div id="q-ai-box" class="q-ai hidden">
+              <button type="button" id="q-ai">✨ Gerar imagem por IA</button>
+              <div class="muted small">Ilustração a partir do produto identificado pelo código de barras (nome, marca e tamanho do formulário ou das bases externas).
+                Não conta como foto real. Cada imagem é cobrada pelo provedor.</div>
+            </div>
+          </div>
+          <div class="q-main">
+            <div class="q-head">
+              <div>
+                <div id="q-title" class="q-title"></div>
+                <div id="q-codes" class="q-codes"></div>
+              </div>
+              <span id="q-badges"></span>
+            </div>
+            <div id="q-autofill-note" class="q-note hidden"></div>
+            <div id="q-suggest" class="q-suggest"></div>
+            <form id="q-form" class="grid" autocomplete="off">
+              <label class="span2">Nome *<input name="name" required></label>
+              <label>Marca<input name="brand"></label>
+              <label>Categoria<input name="category" list="categories"></label>
+              <label>Unidade<input name="unit" placeholder="UN, CX, KG..."></label>
+              <label>SKU<input name="sku"></label>
+              <label class="span2">Descrição<textarea name="description" rows="3"></textarea></label>
+            </form>
+            <p id="q-msg" class="msg"></p>
+            <div class="q-actions">
+              <button type="button" id="q-prev">◀ Anterior</button>
+              <button type="button" id="q-skip">Pular</button>
+              <button type="button" id="q-open">Abrir cadastro completo</button>
+              <button type="button" id="q-save" class="primary" title="Ctrl+Enter">Salvar e próximo ▶</button>
+            </div>
+            <p class="muted small">Salvar grava os dados, renova o prazo e tira o item da lista de pendentes. Atalho: Ctrl+Enter.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Importar planilha -->
+      <div class="upd-pane hidden" data-pane="import">
+        <div class="panel">
+          <p>Envie um arquivo <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong> com uma linha por produto. A primeira linha deve ter os nomes das colunas:</p>
+          <table class="dash-table cols-help">
+            <tr><td><code>codigo_barras</code> (ou EAN, GTIN)</td><td>um ou mais códigos separados por <code>|</code> — é por ele que o produto é localizado</td></tr>
+            <tr><td><code>sku</code></td><td>usado para localizar quando não há código de barras</td></tr>
+            <tr><td><code>nome</code>, <code>descricao</code>, <code>marca</code>, <code>categoria</code>, <code>unidade</code></td><td>dados do cadastro</td></tr>
+            <tr><td><code>ativo</code></td><td>sim/não</td></tr>
+            <tr><td><code>imagem_url</code></td><td>URLs de imagens separadas por <code>|</code> (são baixadas)</td></tr>
+          </table>
+          <p><a href="#" id="imp-model">Baixar planilha modelo (CSV)</a></p>
+          <div class="imp-options">
+            <label class="check"><input type="checkbox" id="imp-create" checked> Criar produtos para códigos que não existem</label>
+            <label class="check"><input type="checkbox" id="imp-resolve" checked> Tirar da lista de pendentes os itens atualizados</label>
+            <label class="check"><input type="checkbox" id="imp-images" checked> Baixar as imagens das URLs</label>
+            <label class="check"><input type="checkbox" id="imp-empty"> Células vazias apagam o valor atual (exceto nome)</label>
+          </div>
+          <div id="imp-drop" class="dropzone">
+            Arraste a planilha aqui ou <label class="link">escolha o arquivo<input id="imp-file" type="file" accept=".csv,.xlsx,.txt" hidden></label>
+          </div>
+        </div>
+        <p id="imp-msg" class="msg"></p>
+        <div id="imp-preview" class="panel hidden">
+          <div class="imp-head">
+            <div>
+              <h2 id="imp-title"></h2>
+              <div id="imp-summary" class="imp-summary"></div>
+              <div id="imp-unknown" class="muted small"></div>
+            </div>
+            <div class="actions">
+              <select id="imp-filter">
+                <option value="">Todas as linhas</option>
+                <option value="create">Criar</option>
+                <option value="update">Atualizar</option>
+                <option value="unchanged">Sem mudança</option>
+                <option value="skip">Ignoradas</option>
+                <option value="error">Com erro</option>
+              </select>
+              <button type="button" id="imp-cancel">Cancelar</button>
+              <button type="button" id="imp-apply" class="primary">Aplicar importação</button>
+            </div>
+          </div>
+          <div class="imp-table-wrap"><table class="dash-table imp-table">
+            <thead><tr><th>Linha</th><th>Ação</th><th>Produto</th><th>Alterações</th></tr></thead>
+            <tbody id="imp-rows"></tbody>
+          </table></div>
+          <p id="imp-more" class="muted small"></p>
+        </div>
+        <div id="imp-result" class="panel hidden"></div>
+      </div>
+
+      <!-- Importar XML de NFC-e -->
+      <div class="upd-pane hidden" data-pane="xml">
+        <div class="panel">
+          <p>Envie <strong>XMLs de NFC-e</strong> autorizadas, soltos ou em um <strong>.zip</strong>. O estado de cada nota é o do emitente.
+            Os dados do consumidor e o XML não são guardados.</p>
+          <div class="imp-options">
+            <label class="check"><input type="checkbox" id="xml-create" checked> Criar produtos para códigos que não existem</label>
+            <label class="check"><input type="checkbox" id="xml-replace-tax" checked> Atualizar tributos diferentes do cadastro</label>
+            <label class="check"><input type="checkbox" id="xml-replace-registry"> Trocar NCM, CEST, origem e registro já preenchidos</label>
+            <label class="check"><input type="checkbox" id="xml-simples"> Usar ICMS, PIS e COFINS de emitente do Simples</label>
+          </div>
+          <div id="xml-send">
+            <div id="xml-drop" class="dropzone">
+              Arraste os arquivos aqui ou <label class="link">escolha os arquivos<input id="xml-file" type="file" accept=".xml,.zip" multiple hidden></label>
+              <div class="muted small">Para mais de 5.000 notas, use um .zip (até 1 GB).</div>
+            </div>
+          </div>
+          <p id="xml-busy" class="muted hidden" role="status"></p>
+          <p id="xml-msg" class="msg"></p>
+        </div>
+        <div id="xml-preview" class="panel hidden">
+          <div class="imp-head">
+            <div>
+              <h2 id="xml-title"></h2>
+              <div id="xml-summary" class="imp-summary"></div>
+            </div>
+            <div class="actions">
+              <button type="button" id="xml-cancel">Cancelar</button>
+              <button type="button" id="xml-apply" class="primary">Gravar importação</button>
+            </div>
+          </div>
+          <div class="imp-table-wrap"><table class="dash-table">
+            <thead><tr><th>Estado</th><th class="num">Notas</th><th class="num">Itens</th><th class="num">Itens com IBS/CBS/IS</th><th class="num">Emitentes</th></tr></thead>
+            <tbody id="xml-ufs"></tbody>
+          </table></div>
+          <ul id="xml-notes" class="xml-notes muted small"></ul>
+          <label class="xml-view">Ver alterações em
+            <select id="xml-view">
+              <option value="products">Produtos</option>
+              <option value="rules">Regras de NCM por estado</option>
+              <option value="exceptions">Exceções do produto por estado</option>
+            </select>
+          </label>
+          <div class="imp-table-wrap"><table class="dash-table imp-table">
+            <thead><tr id="xml-head"></tr></thead>
+            <tbody id="xml-rows"></tbody>
+          </table></div>
+          <p id="xml-more" class="muted small"></p>
+        </div>
+        <div id="xml-result" class="panel hidden"></div>
+      </div>
+
+      <!-- Busca automática -->
+      <div class="upd-pane hidden" data-pane="auto">
+        <div class="panel">
+          <p>Consulta o código de barras em bases externas e preenche <strong>somente o que está vazio</strong>
+            (ou o nome provisório "PRODUTO NÃO CADASTRADO"), além de baixar a foto quando o item só tem a imagem padrão.
+            Os itens continuam <strong>pendentes</strong> para você revisar na fila.</p>
+          <p class="small">Bases: <span id="auto-sources"></span></p>
+          <div class="upd-toolbar">
+            <label>Itens
+              <select id="auto-target">
+                <option value="pending">Pendentes</option>
+                <option value="no_image">Sem foto real</option>
+                <option value="overdue">Vencidos</option>
+              </select>
+            </label>
+            <label>Limite <input id="auto-limit" type="number" min="1" max="5000" placeholder="todos" style="width:90px"></label>
+            <label class="check"><input type="checkbox" id="auto-skip" checked> Pular itens já consultados</label>
+            <label class="check" title="Cada item consultado gasta 1 da franquia diária da Cosmos; ao estourar, a Cosmos é ignorada e o lote segue com as outras bases">
+              <input type="checkbox" id="auto-cosmos"> Incluir Cosmos (gasta a franquia diária)</label>
+            <label class="check" title="Quando nenhuma base tiver foto, gera uma ilustração por IA a partir do produto identificado. Itens sem nome identificado são pulados.">
+              <input type="checkbox" id="auto-ai"> Gerar imagem por IA quando não houver foto (cobrado pelo provedor)</label>
+            <button type="button" id="auto-start" class="primary">Iniciar</button>
+            <button type="button" id="auto-stop" class="danger hidden">Parar</button>
+          </div>
+          <div id="auto-status" class="auto-status"></div>
+        </div>
+        <div class="panel">
+          <h2>Últimos itens processados</h2>
+          <div id="auto-log"><p class="muted small">Nada processado ainda.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <input id="search" type="search" placeholder="Buscar por nome, SKU ou código de barras">
+        <button id="new-product" class="primary">+ Novo</button>
+      </div>
+      <div class="tabs">
+        <button type="button" data-filter="" class="active">Todos</button>
+        <button type="button" data-filter="pending">Pendentes <span id="pending-count" class="count">0</span></button>
+        <button type="button" data-filter="overdue">Vencidos <span id="overdue-count" class="count">0</span></button>
+      </div>
+      <div id="filter-chip" class="filter-chip hidden">
+        Filtro: <strong id="filter-name"></strong>
+        <button type="button" id="filter-clear" class="icon" title="Limpar filtro">✕</button>
+      </div>
+      <div class="list-tools">
+        <p id="list-count" class="muted small"></p>
+        <span class="list-modes">
+          <button type="button" id="bulk-mode" class="link small">☑ Edição em massa</button>
+          <button type="button" id="merge-mode" class="link small">⇄ Mesclar</button>
+        </span>
+      </div>
+      <div id="bulk-bar" class="merge-bar hidden">
+        <div class="small"><strong id="bulk-count">0 selecionado(s)</strong> — clique nos itens para marcar.
+          <button type="button" id="bulk-all" class="link small">Selecionar todos os do filtro atual</button></div>
+        <div class="merge-actions">
+          <button type="button" id="bulk-cancel">Cancelar</button>
+          <button type="button" id="bulk-go" class="primary" disabled>Aplicar ações…</button>
+        </div>
+      </div>
+      <div id="merge-bar" class="merge-bar hidden">
+        <div class="small">Clique nos itens <strong>na ordem</strong>: o <strong>1º</strong> é o principal e mantém todos os dados;
+          os demais cedem códigos de barras e imagens e são removidos.</div>
+        <div class="merge-actions">
+          <button type="button" id="merge-cancel">Cancelar</button>
+          <button type="button" id="merge-go" class="primary" disabled>Mesclar (0)</button>
+        </div>
+      </div>
+      <ul id="product-list" class="product-list"></ul>
+      <div id="list-more" class="list-more hidden">
+        <button type="button" id="list-more-btn">Carregar mais</button>
+      </div>
+    </aside>
+
+    <main class="editor">
+      <div id="empty" class="empty">Selecione um produto ou crie um novo.</div>
+
+      <form id="settings-form" class="settings hidden">
+        <div class="editor-head">
+          <h2>Parâmetros</h2>
+          <div class="actions">
+            <button type="button" id="close-settings">Fechar</button>
+            <button class="primary">Salvar</button>
+          </div>
+        </div>
+        <p id="settings-msg" class="msg"></p>
+
+        <div class="param">
+          <label for="prazo_cadastro_dias">Prazo para atualização do cadastro</label>
+          <div class="param-input"><input id="prazo_cadastro_dias" name="prazo_cadastro_dias" type="number" min="0" max="3650" step="1" required> dias</div>
+          <p class="muted small">Tempo máximo desde a última atualização dos dados do item (nome, descrição, códigos...).
+            Passado o prazo, o item aparece em <strong>Vencidos</strong>. Salvar o cadastro conta como atualização. Use 0 para não ter prazo.</p>
+        </div>
+
+        <div class="param">
+          <label for="prazo_imagens_dias">Prazo para atualização das imagens</label>
+          <div class="param-input"><input id="prazo_imagens_dias" name="prazo_imagens_dias" type="number" min="0" max="3650" step="1" required> dias</div>
+          <p class="muted small">Tempo máximo desde a última alteração das imagens (envio, exclusão ou reordenação) ou da confirmação de que continuam corretas.
+            Use 0 para não ter prazo.</p>
+        </div>
+
+        <div class="param">
+          <label for="cosmos_token">Token da API Cosmos (Bluesoft) — opcional</label>
+          <div class="param-input">
+            <input id="cosmos_token" type="password" autocomplete="off" style="width:320px" placeholder="cole o token para configurar">
+            <button type="button" id="cosmos-remove" class="danger hidden">Remover</button>
+          </div>
+          <p class="muted small"><span id="cosmos-status"></span> Base brasileira com boa cobertura (inclusive medicamentos), usada na busca automática
+            junto com as bases públicas Open Food/Beauty/Products Facts. Crie uma conta em cosmos.bluesoft.com.br para obter o token.
+            O token fica guardado no servidor e não é exibido depois de salvo.</p>
+        </div>
+
+        <div class="param">
+          <label>Imagem padrão</label>
+          <div id="default-images" class="default-images"></div>
+          <p class="muted small">Aparece em todo produto sem imagem própria, aqui e para os sistemas que consultam o catálogo. Enviar uma foto para o produto substitui a imagem padrão;
+            excluir a última foto faz a padrão voltar. A troca vale para todos os produtos de uma vez (sistemas externos podem levar até 1 dia para atualizar a imagem já guardada).</p>
+        </div>
+
+        <div class="param">
+          <label class="check"><input type="checkbox" id="exigir_chave"> Exigir chave de acesso na API pública</label>
+          <p class="muted small">Desligado: a API responde a qualquer sistema, e as consultas feitas com a chave de uma empresa são contadas para a cobrança dela.
+            Ligado: a API (<code>/api/v1/…</code> e <code>/img/…</code>) só responde com a chave de uma empresa <strong>ativa</strong>.
+            Antes de ligar, confira se todos os sistemas que consultam o catálogo já enviam a chave. A tela de <a href="/consulta/" target="_blank">consulta</a> continua aberta.</p>
+        </div>
+
+        <div class="param">
+          <label for="cnpja_token">Token da API comercial CNPJá — opcional</label>
+          <div class="param-input">
+            <input id="cnpja_token" type="password" autocomplete="off" style="width:320px" placeholder="cole o token para configurar">
+            <button type="button" id="cnpja-remove" class="danger hidden">Remover</button>
+          </div>
+          <p class="muted small"><span id="cnpja-status"></span> Sem token, a busca por CNPJ traz os dados da Receita Federal pelas bases gratuitas, e a
+            Inscrição Estadual é preenchida à mão (os Sintegras estaduais exigem captcha). Com o token pago do CNPJá (cnpja.com),
+            a Inscrição Estadual vem junto (consulta ao Sintegra/CCC).</p>
+        </div>
+
+        <div class="param">
+          <label for="ia_provedor">Geração de imagem por IA — opcional</label>
+          <div class="param-input">
+            <select id="ia_provedor">
+              <option value="">desligada</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+            <input id="ia_modelo" placeholder="modelo (padrão)" style="width:200px" autocomplete="off">
+          </div>
+          <div class="param-input" style="margin-top:6px">
+            <input id="ia_token" type="password" autocomplete="off" style="width:320px" placeholder="cole a chave da API para configurar">
+            <button type="button" id="ia-remove" class="danger hidden">Remover</button>
+          </div>
+          <p class="muted small"><span id="ia-status"></span> Habilita o botão "Gerar imagem por IA" na fila de atualização e a opção na busca automática.
+            A imagem é uma <strong>ilustração</strong> feita a partir do produto identificado pelo código de barras (nome, marca, tamanho);
+            fica marcada como IA, não conta como foto real e pode não reproduzir a embalagem exata. Cada imagem é cobrada na sua conta do provedor
+            (chave em platform.openai.com ou aistudio.google.com). Modelos padrão: <span id="ia-default-models"></span>.</p>
+        </div>
+      </form>
+
+      <form id="product-form" class="hidden" novalidate>
+        <div class="editor-head">
+          <div>
+            <h2 id="form-title">Novo produto</h2>
+            <div id="record-meta" class="muted small"></div>
+          </div>
+          <div class="actions">
+            <button type="button" id="delete-product" class="danger">Excluir</button>
+            <button class="primary">Salvar</button>
+          </div>
+        </div>
+        <p id="form-msg" class="msg"></p>
+
+        <div id="pending-banner" class="pending-banner hidden">
+          <div>
+            <strong>Cadastro automático pendente de atualização</strong>
+            <div id="pending-info" class="small"></div>
+            <div class="small">Complete nome, descrição e envie as fotos reais (a imagem padrão é substituída no primeiro envio).</div>
+          </div>
+          <button type="button" id="resolve" class="primary">Marcar como atualizado</button>
+        </div>
+
+        <label class="prod-name">Nome *<input name="name"><small class="fd" data-field="name"></small></label>
+
+        <div class="prod-tabs" role="tablist">
+          <button type="button" data-ptab="images">Imagens <span id="ptab-images-count" class="ptab-count"></span></button>
+          <button type="button" data-ptab="barcodes">Códigos de barras <span id="ptab-barcodes-count" class="ptab-count"></span></button>
+          <button type="button" data-ptab="general">Dados gerais</button>
+          <button type="button" data-ptab="tax">Tributação</button>
+          <button type="button" data-ptab="medicine">Medicamento <span id="ptab-medicine-count" class="ptab-count"></span></button>
+          <button type="button" data-ptab="links">Links e histórico</button>
+        </div>
+
+        <!-- Imagens -->
+        <div class="prod-pane" data-pane="images">
+          <p id="images-new" class="empty small hidden">Salve o produto para poder adicionar imagens.</p>
+          <div id="images-block">
+            <div id="review-images" class="review-item"></div>
+            <div id="dropzone" class="dropzone">
+              Arraste imagens aqui ou <label class="link">escolha arquivos<input id="file-input" type="file" accept="image/*" multiple hidden></label>
+              <div class="muted small">JPG, PNG, WEBP, GIF, AVIF · até 15 MB · a primeira é a principal</div>
+            </div>
+            <div id="images" class="images"></div>
+          </div>
+        </div>
+
+        <!-- Códigos de barras -->
+        <div class="prod-pane" data-pane="barcodes">
+          <table class="barcodes">
+            <thead><tr><th>Código</th><th>Tipo</th><th>Observação</th><th></th></tr></thead>
+            <tbody id="barcode-rows"></tbody>
+          </table>
+          <button type="button" id="add-barcode">+ Adicionar código</button>
+          <p class="muted small">EAN-8, UPC-A, EAN-13 e DUN-14 são detectados e validados automaticamente.</p>
+        </div>
+
+        <!-- Dados gerais -->
+        <div class="prod-pane" data-pane="general">
+          <div id="review-data" class="review-item"></div>
+          <div class="grid">
+            <label>Marca<input name="brand"><small class="fd" data-field="brand"></small></label>
+            <label>Fabricante / laboratório<input name="manufacturer"><small class="fd" data-field="manufacturer"></small></label>
+            <label>Categoria<input name="category" list="categories"><small class="fd" data-field="category"></small></label>
+            <label>SKU / Código interno<input name="sku"><small class="fd" data-field="sku"></small></label>
+            <label>Unidade de medida<input name="unit" placeholder="UN, CX, KG, ML..." list="units"><small class="fd" data-field="unit"></small></label>
+            <label>Quantidade na embalagem<input name="pack_qty" inputmode="decimal" placeholder="ex.: 12"><small class="fd" data-field="pack_qty"></small></label>
+            <label>Peso bruto (kg)<input name="gross_weight" inputmode="decimal" placeholder="ex.: 0,520"><small class="fd" data-field="gross_weight"></small></label>
+            <label>Peso líquido (kg)<input name="net_weight" inputmode="decimal" placeholder="ex.: 0,500"><small class="fd" data-field="net_weight"></small></label>
+            <div class="span2 dims">
+              <label>Altura (cm)<input name="height" inputmode="decimal"><small class="fd" data-field="height"></small></label>
+              <label>Largura (cm)<input name="width" inputmode="decimal"><small class="fd" data-field="width"></small></label>
+              <label>Profundidade (cm)<input name="depth" inputmode="decimal"><small class="fd" data-field="depth"></small></label>
+            </div>
+            <label class="span2">Descrição<textarea name="description" rows="4"></textarea><small class="fd" data-field="description"></small></label>
+            <div class="span2">
+              <label class="check"><input type="checkbox" name="active" checked> Ativo no catálogo</label>
+              <small class="fd" data-field="active"></small>
+            </div>
+          </div>
+          <datalist id="categories"></datalist>
+          <datalist id="units"><option value="UN"><option value="CX"><option value="FR"><option value="BL"><option value="TB"><option value="KG"><option value="G"><option value="L"><option value="ML"><option value="PCT"></datalist>
+        </div>
+
+        <!-- Tributação -->
+        <div class="prod-pane" data-pane="tax">
+          <div class="grid">
+            <label>NCM<input name="ncm" inputmode="numeric" placeholder="digite o código ou a descrição" list="ncm-options" autocomplete="off"><small id="p-ncm-desc" class="muted small"></small><small class="fd" data-field="ncm"></small></label>
+            <label>Classificação tributária<select name="tax_class_id" class="tax-class-select"></select><small class="fd" data-field="tax_class_id"></small></label>
+            <label class="span2">Origem da mercadoria
+              <select name="tax_origin">
+                <option value="">—</option>
+                <option value="0">0 - Nacional</option>
+                <option value="1">1 - Estrangeira, importação direta</option>
+                <option value="2">2 - Estrangeira, adquirida no mercado interno</option>
+                <option value="3">3 - Nacional, conteúdo de importação acima de 40% e até 70%</option>
+                <option value="4">4 - Nacional, processos produtivos básicos</option>
+                <option value="5">5 - Nacional, conteúdo de importação até 40%</option>
+                <option value="6">6 - Estrangeira, importação direta, sem similar nacional</option>
+                <option value="7">7 - Estrangeira, mercado interno, sem similar nacional</option>
+                <option value="8">8 - Nacional, conteúdo de importação acima de 70%</option>
+              </select><small class="fd" data-field="tax_origin"></small></label>
+          </div>
+          <datalist id="ncm-options"></datalist>
+
+          <section class="block">
+            <div class="tax-head">
+              <h3>Tributação que vale para este produto</h3>
+              <label>Estado <select id="p-tax-uf"></select></label>
+            </div>
+            <div id="p-tax-result"></div>
+          </section>
+
+          <details id="p-tax-override" class="block tax-override">
+            <summary>Exceção só deste produto <span id="p-override-count" class="muted small"></span></summary>
+            <p class="muted small">Campo preenchido aqui vale em todos os estados e substitui o NCM e as regras. Deixe vazio para usar as regras do NCM.</p>
+            <div class="grid">
+              <label>CEST<input name="cest" inputmode="numeric" placeholder="7 dígitos"><small class="fd" data-field="cest"></small></label>
+              <label>CFOP<input name="cfop" inputmode="numeric" placeholder="4 dígitos"><small class="fd" data-field="cfop"></small></label>
+            </div>
+            <table class="tax-table">
+              <thead><tr><th>Imposto</th><th>CST / CSOSN</th><th>Alíquota (%)</th></tr></thead>
+              <tbody>
+                <tr><td>ICMS</td><td><input name="cst_icms" aria-label="CST do ICMS"></td><td><input name="icms_rate" inputmode="decimal" aria-label="Alíquota de ICMS"></td></tr>
+                <tr><td>IPI</td><td><input name="cst_ipi" aria-label="CST do IPI"></td><td><input name="ipi_rate" inputmode="decimal" aria-label="Alíquota de IPI"></td></tr>
+                <tr><td>PIS</td><td><input name="cst_pis" aria-label="CST do PIS"></td><td><input name="pis_rate" inputmode="decimal" aria-label="Alíquota de PIS"></td></tr>
+                <tr><td>COFINS</td><td><input name="cst_cofins" aria-label="CST da COFINS"></td><td><input name="cofins_rate" inputmode="decimal" aria-label="Alíquota de COFINS"></td></tr>
+              </tbody>
+            </table>
+            <h3 class="ncm-sub">Reforma tributária</h3>
+            <div class="grid" data-reform-fields></div>
+          </details>
+          <section id="p-tax-states" class="block hidden">
+            <h3>Exceções deste produto por estado</h3>
+            <p class="muted small">Valem só no estado indicado e ficam acima de todas as outras regras. Vêm da importação de NFC-e.</p>
+            <div id="p-tax-state-list"></div>
+          </section>
+          <label class="tax-notes">Observações fiscais<textarea name="tax_notes" rows="2"></textarea><small class="fd" data-field="tax_notes"></small></label>
+        </div>
+
+        <!-- Medicamento -->
+        <div class="prod-pane" data-pane="medicine">
+          <label class="check"><input type="checkbox" name="is_medicine" id="is-medicine"> Este produto é um medicamento</label>
+          <div id="med-fields" class="hidden">
+            <section class="block med-actives">
+              <h3>Princípios ativos (DCB)</h3>
+              <div class="dcb-picker">
+                <input id="dcb-search" type="search" placeholder="Digite o nome, o número DCB ou o CAS para adicionar" autocomplete="off">
+                <ul id="dcb-options" class="dcb-options hidden"></ul>
+              </div>
+              <table id="actives-table" class="tax-table hidden">
+                <thead><tr><th>Princípio ativo</th><th>Concentração</th><th></th></tr></thead>
+                <tbody id="actives-rows"></tbody>
+              </table>
+              <p id="actives-empty" class="muted small">Nenhum princípio ativo escolhido. Um medicamento pode ter vários: adicione um por vez.</p>
+              <small class="fd" data-field="dcb"></small>
+            </section>
+            <div class="grid">
+              <label>Registro no Ministério da Saúde<input name="anvisa_registry" inputmode="numeric" placeholder="9 a 13 dígitos"><small class="fd" data-field="anvisa_registry"></small></label>
+              <label>Tipo
+                <select name="med_type">
+                  <option value="">—</option><option>Referência</option><option>Genérico</option><option>Similar</option>
+                  <option>Biológico</option><option>Específico</option><option>Fitoterápico</option><option>Dinamizado</option><option>Notificado</option>
+                </select><small class="fd" data-field="med_type"></small></label>
+              <label>Tarja
+                <select name="med_stripe">
+                  <option value="">—</option><option>Sem tarja (isento de prescrição)</option><option>Tarja vermelha</option>
+                  <option>Tarja vermelha com retenção de receita</option><option>Tarja preta</option>
+                </select><small class="fd" data-field="med_stripe"></small></label>
+              <label>Controle especial
+                <select name="med_controlled">
+                  <option value="">Não controlado</option><option>Antimicrobiano</option>
+                  <option>A1</option><option>A2</option><option>A3</option><option>B1</option><option>B2</option>
+                  <option>C1</option><option>C2</option><option>C3</option><option>C4</option><option>C5</option>
+                </select><small class="fd" data-field="med_controlled"></small></label>
+              <label>Forma farmacêutica<input name="med_form" placeholder="ex.: comprimido revestido"><small class="fd" data-field="med_form"></small></label>
+              <label>Classe terapêutica<input name="med_therapeutic_class"><small class="fd" data-field="med_therapeutic_class"></small></label>
+              <label class="span2">Apresentação<input name="med_presentation" placeholder="ex.: 500 mg, caixa com 20 comprimidos"><small class="fd" data-field="med_presentation"></small></label>
+              <label class="span2">Observações<textarea name="med_notes" rows="2"></textarea><small class="fd" data-field="med_notes"></small></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Links e histórico -->
+        <div class="prod-pane" data-pane="links">
+          <p id="links-new" class="empty small hidden">Os links são gerados depois de salvar o produto.</p>
+          <section id="links-block">
+            <h3>Links para outros sistemas</h3>
+            <div id="links" class="links"></div>
+          </section>
+          <section class="block hidden" id="merges-block">
+            <h3>Histórico de mesclagens</h3>
+            <ul id="merges" class="merges"></ul>
+          </section>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <dialog id="merge-dialog" class="merge-dialog">
+    <form method="dialog">
+      <h2>Confirmar mesclagem</h2>
+      <div id="merge-summary"></div>
+      <p class="small muted">Códigos de barras e imagens mantêm as datas de cadastro e atualização originais.
+        Os itens agregados são removidos; seus links antigos passam a redirecionar para o principal. Não há como desfazer.</p>
+      <div class="merge-actions">
+        <button value="cancel">Cancelar</button>
+        <button value="ok" id="merge-confirm" class="primary">Mesclar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="bulk-dialog" class="merge-dialog">
+    <form method="dialog" id="bulk-form">
+      <h2>Edição em massa</h2>
+      <p id="bulk-target" class="small"></p>
+      <div class="bulk-fields">
+        <label class="check"><input type="checkbox" data-enable="category"> Categoria</label>
+        <input name="category" list="categories" disabled placeholder="nova categoria">
+        <label class="check"><input type="checkbox" data-enable="brand"> Marca</label>
+        <input name="brand" disabled placeholder="nova marca">
+        <label class="check"><input type="checkbox" data-enable="unit"> Unidade</label>
+        <input name="unit" disabled placeholder="UN, CX, KG...">
+        <label class="check"><input type="checkbox" data-enable="ncm"> NCM</label>
+        <input name="ncm" disabled placeholder="digite o código ou a descrição" list="ncm-options" autocomplete="off">
+        <label class="check"><input type="checkbox" data-enable="tax_class_id"> Classificação tributária</label>
+        <select name="tax_class_id" class="tax-class-select" disabled></select>
+        <label>Situação</label>
+        <select name="active">
+          <option value="">não alterar</option>
+          <option value="1">ativar (aparece no catálogo)</option>
+          <option value="0">desativar (sai do catálogo)</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" name="resolve"> Marcar pendentes como atualizados</label>
+      <label class="check"><input type="checkbox" name="confirm_images"> Confirmar imagens atuais (renova o prazo; ignora itens só com imagem padrão)</label>
+      <p class="small muted">Campos marcados com valor vazio apagam a informação. As datas de alteração de cada campo são registradas.</p>
+      <div class="merge-actions">
+        <button value="cancel">Cancelar</button>
+        <button value="ok" class="primary">Aplicar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rule-dialog" class="merge-dialog rule-dialog">
+    <form method="dialog" id="rule-form" autocomplete="off">
+      <h2 id="rule-title">Nova regra</h2>
+      <div id="rule-ufs-box">
+        <label class="check"><input type="checkbox" id="rule-all-ufs"> <strong>Todos os estados</strong> (regra geral)</label>
+        <div id="rule-ufs" class="uf-grid"></div>
+        <button type="button" id="rule-mark-all" class="link small">Marcar todos (cria uma regra por estado)</button>
+      </div>
+      <p id="rule-uf-fixed" class="hidden"></p>
+      <div class="grid">
+        <label class="span2">Classificação tributária<select name="class_id" id="rule-class"></select></label>
+      </div>
+      <h3 class="ncm-sub">ICMS</h3>
+      <div class="grid">
+        <label>CFOP<input name="cfop" inputmode="numeric"></label>
+        <label>CST / CSOSN<input name="cst_icms" inputmode="numeric"></label>
+        <label>Alíquota de ICMS (%)<input name="icms_rate" inputmode="decimal"></label>
+        <label>Redução da base (%)<input name="icms_reduction" inputmode="decimal"></label>
+        <label>FCP (%)<input name="fcp_rate" inputmode="decimal"></label>
+        <label>MVA (%)<input name="mva" inputmode="decimal"></label>
+        <label>Alíquota do ICMS-ST (%)<input name="icms_st_rate" inputmode="decimal"></label>
+      </div>
+      <details class="rule-more">
+        <summary>Federais e reforma tributária (vazio = herda do NCM)</summary>
+        <div class="grid">
+              <label>CST do IPI<input name="cst_ipi"></label>
+              <label>IPI (%)<input name="ipi_rate" inputmode="decimal"></label>
+              <label>CST do PIS<input name="cst_pis"></label>
+              <label>PIS (%)<input name="pis_rate" inputmode="decimal"></label>
+              <label>CST da COFINS<input name="cst_cofins"></label>
+              <label>COFINS (%)<input name="cofins_rate" inputmode="decimal"></label>
+        </div>
+        <h3 class="ncm-sub">Reforma tributária</h3>
+        <div class="grid" data-reform-fields></div>
+      </details>
+      <div class="grid" style="margin-top:12px"><label class="span2">Observações<textarea name="notes" rows="2"></textarea></label></div>
+      <p id="rule-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button type="button" id="rule-delete" class="danger hidden">Excluir</button>
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="class-dialog" class="merge-dialog">
+    <form method="dialog" id="class-form" autocomplete="off">
+      <h2 id="class-title">Nova classificação</h2>
+      <div class="grid">
+        <label class="span2">Nome *<input name="name"></label>
+        <label>Código interno<input name="code"></label>
+        <span></span>
+      </div>
+      <h3 class="ncm-sub">Reforma tributária</h3>
+      <div class="grid" data-reform-fields></div>
+      <div class="grid" style="margin-top:12px">
+        <label class="span2">Observações<textarea name="notes" rows="2"></textarea></label>
+      </div>
+      <label class="check"><input type="checkbox" name="active" checked> Ativa (aparece como opção)</label>
+      <p id="class-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button type="button" id="class-delete" class="danger hidden">Excluir</button>
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dcb-dialog" class="merge-dialog">
+    <form method="dialog" id="dcb-form" autocomplete="off">
+      <h2 id="dcb-dialog-title">Nova DCB</h2>
+      <div class="grid">
+        <label class="span2">Nome *<input name="name" required></label>
+        <label>Número DCB<input name="code"></label>
+        <label>CAS<input name="cas" placeholder="ex.: 50-78-2"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="active" checked> Ativa (aparece como opção nos medicamentos)</label>
+      <p id="dcb-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button type="button" id="dcb-delete" class="danger hidden">Excluir</button>
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="user-dialog" class="merge-dialog">
+    <form method="dialog" id="user-form" autocomplete="off">
+      <h2 id="user-dialog-title">Novo usuário</h2>
+      <div class="grid">
+        <label class="span2">Nome *<input name="name" required></label>
+        <label>Login *<input name="login" required autocomplete="off"></label>
+        <label>Senha <span id="user-pass-hint" class="muted small"></span><input name="password" type="password" autocomplete="new-password" minlength="8"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="is_admin"> Administrador (acesso a tudo)</label>
+      <label class="check"><input type="checkbox" name="active" checked> Ativo</label>
+      <fieldset id="user-perms" class="perms">
+        <legend>Módulos liberados</legend>
+      </fieldset>
+      <p id="user-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="plan-dialog" class="merge-dialog">
+    <form method="dialog" id="plan-form" autocomplete="off">
+      <h2 id="plan-dialog-title">Novo plano</h2>
+      <div class="grid">
+        <label class="span2">Nome *<input name="name" required></label>
+        <label>Mensalidade (R$)<input name="monthly" inputmode="decimal" value="0"></label>
+        <label>Consultas incluídas no mês<input name="included" type="number" min="0" step="1" value="0"></label>
+        <label>Valor por consulta extra (R$)<input name="extra_price" inputmode="decimal" value="0" placeholder="ex.: 0,01"></label>
+        <label class="check" style="align-self:end"><input type="checkbox" name="active" checked> Disponível para novas empresas</label>
+      </div>
+      <p id="plan-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button type="button" id="plan-delete" class="danger hidden">Excluir</button>
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="invoice-dialog" class="merge-dialog">
+    <form method="dialog" id="invoice-form">
+      <h2 id="invoice-title">Fatura</h2>
+      <div id="invoice-body"></div>
+      <div class="grid">
+        <label>Desconto (R$)<input name="discount" inputmode="decimal"></label>
+        <label class="span2">Observações<textarea name="notes" rows="2"></textarea></label>
+      </div>
+      <p id="invoice-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button type="button" id="invoice-print">🖨 Imprimir</button>
+        <button type="button" id="invoice-cancel" class="danger">Cancelar fatura</button>
+        <button type="button" id="invoice-reopen">Reabrir</button>
+        <button type="button" id="invoice-save">Salvar</button>
+        <button type="button" id="invoice-pay" class="primary">Registrar pagamento</button>
+        <button value="close" formnovalidate>Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="password-dialog" class="merge-dialog">
+    <form method="dialog" id="password-form">
+      <h2>Trocar minha senha</h2>
+      <label>Nova senha (mínimo 8 caracteres)<input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
+      <label>Repita a nova senha<input name="password2" type="password" minlength="8" required autocomplete="new-password"></label>
+      <p id="password-msg" class="msg"></p>
+      <div class="merge-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button value="ok" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="barcode-row">
+    <tr>
+      <td><div class="bc-code-cell">
+        <input class="bc-code" placeholder="7891234567895">
+        <a class="bc-google hidden" target="_blank" rel="noopener" title="Pesquisar este código no Google Imagens">🔍 Google</a>
+      </div><small class="fd bc-dates"></small></td>
+      <td><input class="bc-type" placeholder="auto"></td>
+      <td><input class="bc-note" placeholder="ex.: caixa com 12"></td>
+      <td><button type="button" class="icon bc-remove" title="Remover">✕</button></td>
+    </tr>
+  </template>
+
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+  <script src="business.js"></script>
+  <script src="dcb.js"></script>
+  <script src="ncm.js"></script>
+  <script src="ncm-import.js"></script>
+  <script src="xml-import.js"></script>
+  <script src="names.js"></script>
+</body>
+</html>
