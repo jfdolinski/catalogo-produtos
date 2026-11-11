@@ -74,6 +74,16 @@ jobs:
           echo "TAMANHO=$(du -m saida/catalogo-app.apk | cut -f1)" >> "$GITHUB_ENV"
           (cd saida && sha256sum catalogo-app.apk > catalogo-app.apk.sha256)
 
+      # A máquina de repositório privado tem disco pequeno: o emulador não sobe com a compilação ocupando espaço.
+      # O APK já está em saida/; o que é da compilação e ferramentas que o emulador não usa podem sair.
+      - name: Libera espaço para o emulador
+        run: |
+          df -h / | tail -1
+          rm -rf android node_modules ~/.gradle ~/.npm
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules "$ANDROID_HOME/ndk"
+          docker system prune -af >/dev/null 2>&1 || true
+          df -h / | tail -1
+
       - name: Habilita o emulador
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
