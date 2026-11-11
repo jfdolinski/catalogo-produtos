@@ -36,7 +36,7 @@ const FORMATS = {
 // A impressão digital ignora a data de geração: o catálogo igual mantém a mesma ETag e o cliente recebe 304
 async function build(format, base, hydrate) {
   const f = FORMATS[format];
-  const ids = db.prepare('SELECT id FROM products WHERE active = 1 ORDER BY name COLLATE NOCASE, id').all().map((r) => r.id);
+  const ids = (await db.prepare('SELECT id FROM products WHERE active = 1 ORDER BY name COLLATE NOCASE, id').all()).map((r) => r.id);
   const gzip = zlib.createGzip();
   const chunks = [];
   gzip.on('data', (d) => chunks.push(d));
@@ -49,9 +49,9 @@ async function build(format, base, hydrate) {
   let first = true;
   for (let i = 0; i < ids.length; i += BATCH) {
     const part = ids.slice(i, i + BATCH);
-    const rows = db.prepare(`SELECT * FROM products WHERE active = 1 AND id IN (${part.map(() => '?').join(',')})`).all(...part);
+    const rows = await db.prepare(`SELECT * FROM products WHERE active = 1 AND id IN (${part.map(() => '?').join(',')})`).all(...part);
     const byId = new Map(rows.map((r) => [r.id, r]));
-    const items = hydrate(part.map((id) => byId.get(id)).filter(Boolean), base);
+    const items = await hydrate(part.map((id) => byId.get(id)).filter(Boolean), base);
     let text = '';
     for (const p of items) { text += f.item(p, first); first = false; }
     hash.update(text);
@@ -92,7 +92,7 @@ export function mountCatalog(pub, { hydrate, baseUrl }) {
       refresh(key, format, base).catch((e) => console.error('catálogo:', e));
       return slot.entry;
     }
-    return refresh(key, format, base);
+    return await refresh(key, format, base);
   }
 
   const route = (format) => async (req, res, next) => {

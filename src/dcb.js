@@ -1,5 +1,5 @@
 // Lista DCB (Denominação Comum Brasileira): cadastro, importação por arquivo e vínculo com os medicamentos.
-import { db } from './db.js';
+import { db, mapSeries } from './db.js';
 import { HttpError, tx, iso } from './business.js';
 import { readGrid, norm } from './importer.js';
 
@@ -70,7 +70,7 @@ function planImport(rows, { updateExisting = true } = {}) {
   const byName = db.prepare('SELECT * FROM dcb WHERE name_key = ?');
   const seenName = new Map();
   const seenCode = new Map();
-  return rows.map((row) => {
+  return mapSeries(rows, async row => {
     const name = clean(row.name);
     const code = clean(row.code, 40);
     const cas = clean(row.cas, 40);
@@ -88,8 +88,8 @@ function planImport(rows, { updateExisting = true } = {}) {
     if (code) seenCode.set(code, row.line);
     if (row.raw_cas && !cas && !/^(n[ãa]o|-|—|n\/?a|\[?ref)/i.test(row.raw_cas)) item.warning = `CAS ignorado: "${row.raw_cas}"`;
 
-    const withCode = code ? byCode.get(code) : null;
-    const withName = byName.get(nameKey);
+    const withCode = code ? await byCode.get(code) : null;
+    const withName = await byName.get(nameKey);
     if (withCode && withName && withCode.id !== withName.id) {
       return fail(`conflito: o número ${code} é de "${withCode.name}", e este nome já existe com outro número`);
     }
@@ -115,23 +115,23 @@ const countPlan = (plan) => {
 // ---- Vínculo com os produtos --------------------------------------------------
 
 // Grava os princípios ativos do produto. Retorna true se mudou algo.
-export function replaceProductDcb(productId, list) {
+export async function replaceProductDcb(productId, list) {
   if (!Array.isArray(list)) throw new HttpError(400, 'dcb deve ser uma lista');
   const items = list.map((x) => ({ id: Number(x.id), concentration: clean(x.concentration, 100) }));
   if (new Set(items.map((x) => x.id)).size !== items.length) throw new HttpError(400, 'Princípio ativo repetido na lista');
   for (const x of items) {
-    if (!db.prepare('SELECT 1 FROM dcb WHERE id = ?').get(x.id)) throw new HttpError(400, `Princípio ativo #${x.id} não encontrado na lista DCB`);
+    if (!(await db.prepare('SELECT 1 FROM dcb WHERE id = ?').get(x.id))) throw new HttpError(400, `Princípio ativo #${x.id} não encontrado na lista DCB`);
   }
-  const current = db.prepare('SELECT dcb_id AS id, concentration FROM product_dcb WHERE product_id = ? ORDER BY position, dcb_id').all(productId);
+  const current = await db.prepare('SELECT dcb_id AS id, concentration FROM product_dcb WHERE product_id = ? ORDER BY position, dcb_id').all(productId);
   if (JSON.stringify(current.map((c) => ({ ...c }))) === JSON.stringify(items)) return false;
-  db.prepare('DELETE FROM product_dcb WHERE product_id = ?').run(productId);
+  await db.prepare('DELETE FROM product_dcb WHERE product_id = ?').run(productId);
   const ins = db.prepare('INSERT INTO product_dcb (product_id, dcb_id, concentration, position) VALUES (?, ?, ?, ?)');
-  items.forEach((x, i) => ins.run(productId, x.id, x.concentration, i));
+  for (const [i, x] of items.entries()) await ins.run(productId, x.id, x.concentration, i);
   return true;
 }
 
 // Princípios ativos de vários produtos de uma vez (ids: até 500, limite de parâmetros do SQLite)
-export const activesOf = (ids) => db.prepare(`
+export const activesOf = async ids => await db.prepare(`
   SELECT pd.product_id, d.id, d.code, d.name, d.cas, pd.concentration FROM product_dcb pd JOIN dcb d ON d.id = pd.dcb_id
   WHERE pd.product_id IN (${ids.map(() => '?').join(',')}) ORDER BY pd.position, d.id`).all(...ids);
 
@@ -155,20 +155,20 @@ function cleanDcb(b, partial) {
   return out;
 }
 
-function checkUnique(data, id) {
+async function checkUnique(data, id) {
   if (data.name) {
-    const d = db.prepare('SELECT id FROM dcb WHERE name_key = ? AND id <> ?').get(searchText(data.name), id ?? -1);
+    const d = await db.prepare('SELECT id FROM dcb WHERE name_key = ? AND id <> ?').get(searchText(data.name), id ?? -1);
     if (d) throw new HttpError(409, `Já existe uma DCB com este nome (#${d.id})`);
   }
   if (data.code) {
-    const d = db.prepare('SELECT name FROM dcb WHERE code = ? AND id <> ?').get(data.code, id ?? -1);
+    const d = await db.prepare('SELECT name FROM dcb WHERE code = ? AND id <> ?').get(data.code, id ?? -1);
     if (d) throw new HttpError(409, `O número ${data.code} já é de "${d.name}"`);
   }
 }
 
 export function mountDcb(admin, sheetUpload) {
   // ?q= (nome, número ou CAS; sem acentos) &active=1 &page= &limit=
-  admin.get('/dcb', (req, res) => {
+  admin.get('/dcb', async (req, res) => {
     const where = [];
     const params = [];
     const q = searchText(req.query.q);
@@ -178,40 +178,40 @@ export function mountDcb(admin, sheetUpload) {
     const sql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const page = Math.max(Number(req.query.page) || 1, 1);
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM dcb d ${sql}`).get(...params).n;
+    const total = (await db.prepare(`SELECT COUNT(*) AS n FROM dcb d ${sql}`).get(...params)).n;
     // Quem começa com o texto digitado vem primeiro
-    const rows = db.prepare(`SELECT d.*, (SELECT COUNT(*) FROM product_dcb pd WHERE pd.dcb_id = d.id) AS products FROM dcb d ${sql}
+    const rows = await db.prepare(`SELECT d.*, (SELECT COUNT(*) FROM product_dcb pd WHERE pd.dcb_id = d.id) AS products FROM dcb d ${sql}
       ORDER BY ${q ? '(d.search LIKE ?) DESC, ' : ''}d.name COLLATE NOCASE LIMIT ? OFFSET ?`)
       .all(...params, ...(q ? [`${q}%`] : []), limit, (page - 1) * limit);
     res.json({ total, page, limit, items: rows.map(dcbOut) });
   });
 
-  admin.post('/dcb', (req, res) => {
+  admin.post('/dcb', async (req, res) => {
     const data = cleanDcb(req.body, false);
-    checkUnique(data);
+    await checkUnique(data);
     Object.assign(data, { name_key: searchText(data.name), search: buildSearch(data) });
     const cols = Object.keys(data);
-    const id = db.prepare(`INSERT INTO dcb (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data)).lastInsertRowid;
-    res.status(201).json(dcbOut(db.prepare('SELECT * FROM dcb WHERE id = ?').get(id)));
+    const id = (await db.prepare(`INSERT INTO dcb (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data))).lastInsertRowid;
+    res.status(201).json(dcbOut(await db.prepare('SELECT * FROM dcb WHERE id = ?').get(id)));
   });
 
-  admin.put('/dcb/:id', (req, res) => {
+  admin.put('/dcb/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const old = db.prepare('SELECT * FROM dcb WHERE id = ?').get(id);
+    const old = await db.prepare('SELECT * FROM dcb WHERE id = ?').get(id);
     if (!old) throw new HttpError(404, 'DCB não encontrada');
     const data = cleanDcb(req.body, true);
-    checkUnique(data, id);
+    await checkUnique(data, id);
     Object.assign(data, { name_key: searchText(data.name ?? old.name), search: buildSearch({ ...old, ...data }) });
     const cols = Object.keys(data);
-    db.prepare(`UPDATE dcb SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), id);
-    res.json(dcbOut(db.prepare('SELECT * FROM dcb WHERE id = ?').get(id)));
+    await db.prepare(`UPDATE dcb SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), id);
+    res.json(dcbOut(await db.prepare('SELECT * FROM dcb WHERE id = ?').get(id)));
   });
 
-  admin.delete('/dcb/:id', (req, res) => {
+  admin.delete('/dcb/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const used = db.prepare('SELECT COUNT(*) AS n FROM product_dcb WHERE dcb_id = ?').get(id).n;
+    const used = (await db.prepare('SELECT COUNT(*) AS n FROM product_dcb WHERE dcb_id = ?').get(id)).n;
     if (used) throw new HttpError(409, `Em uso por ${used} produto(s); para tirar das opções, desative em vez de excluir`);
-    if (!db.prepare('DELETE FROM dcb WHERE id = ?').run(id).changes) throw new HttpError(404, 'DCB não encontrada');
+    if (!(await db.prepare('DELETE FROM dcb WHERE id = ?').run(id)).changes) throw new HttpError(404, 'DCB não encontrada');
     res.status(204).end();
   });
 
@@ -223,22 +223,22 @@ export function mountDcb(admin, sheetUpload) {
       catch (e) { throw new HttpError(400, e.message); }
       if (!parsed.rows.length) throw new HttpError(400, 'Nenhuma linha com dados depois do cabeçalho');
       if (parsed.rows.length > MAX_ROWS) throw new HttpError(400, `Arquivo com mais de ${MAX_ROWS} linhas`);
-      const plan = planImport(parsed.rows);
+      const plan = await planImport(parsed.rows);
       res.json({ file: req.file.originalname, columns: parsed.columns, rows: parsed.rows, summary: countPlan(plan), plan });
     } catch (e) { next(e); }
   });
 
-  admin.post('/dcb/import/apply', (req, res) => {
+  admin.post('/dcb/import/apply', async (req, res) => {
     const { rows, update_existing: updateExisting = true } = req.body;
     if (!Array.isArray(rows) || !rows.length) throw new HttpError(400, 'Nenhuma linha para importar');
     if (rows.length > MAX_ROWS) throw new HttpError(400, `Máximo de ${MAX_ROWS} linhas por importação`);
-    const plan = planImport(rows, { updateExisting: updateExisting !== false });
+    const plan = await planImport(rows, { updateExisting: updateExisting !== false });
     const ins = db.prepare('INSERT INTO dcb (code, name, name_key, cas, search) VALUES (?, ?, ?, ?, ?)');
     const upd = db.prepare("UPDATE dcb SET code = ?, name = ?, name_key = ?, cas = ?, search = ?, updated_at = datetime('now') WHERE id = ?");
-    tx(() => {
+    await tx(async () => {
       for (const p of plan) {
-        if (p.action === 'create') ins.run(p.code || null, p.name, searchText(p.name), p.cas, buildSearch(p));
-        else if (p.action === 'update') upd.run(p.code || null, p.name, searchText(p.name), p.cas, buildSearch(p), p.id);
+        if (p.action === 'create') await ins.run(p.code || null, p.name, searchText(p.name), p.cas, buildSearch(p));
+        else if (p.action === 'update') await upd.run(p.code || null, p.name, searchText(p.name), p.cas, buildSearch(p), p.id);
       }
     });
     res.json({ summary: countPlan(plan), errors: plan.filter((p) => p.action === 'error').map((p) => ({ line: p.line, error: p.error })) });

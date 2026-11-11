@@ -46,20 +46,20 @@ export function cleanNcmCode(raw) {
   return c;
 }
 
-export function checkTaxClass(raw) {
+export async function checkTaxClass(raw) {
   if (raw === null || raw === '' || raw === undefined) return null;
   const id = Number(raw);
-  if (!db.prepare('SELECT 1 FROM tax_classes WHERE id = ?').get(id)) throw new HttpError(400, 'Classificação tributária não encontrada');
+  if (!(await db.prepare('SELECT 1 FROM tax_classes WHERE id = ?').get(id))) throw new HttpError(400, 'Classificação tributária não encontrada');
   return id;
 }
 
 // ---- Cálculo --------------------------------------------------------------------
 
 // product: valores da exceção do produto; productUf: exceção do produto no estado (opcionais). uf vazio = só as regras gerais.
-export function resolveTax({ ncm, taxClassId, uf = '', product = null, productUf = null }) {
+export async function resolveTax({ ncm, taxClassId, uf = '', product = null, productUf = null }) {
   const code = String(ncm ?? '').replace(/\D/g, '');
-  const row = code ? db.prepare('SELECT * FROM ncm WHERE code = ?').get(code) : null;
-  const cls = taxClassId ? db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(Number(taxClassId)) : null;
+  const row = code ? await db.prepare('SELECT * FROM ncm WHERE code = ?').get(code) : null;
+  const cls = taxClassId ? await db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(Number(taxClassId)) : null;
   const values = {};
   const sources = {};
   const notes = [];
@@ -72,7 +72,7 @@ export function resolveTax({ ncm, taxClassId, uf = '', product = null, productUf
   }
   if (cls) apply(REFORM_FIELDS, cls, `Classificação ${cls.name}`);
   if (row) {
-    const rules = db.prepare(`SELECT * FROM ncm_rules WHERE ncm_id = ? AND uf IN (?, '') AND class_id IN (?, 0)
+    const rules = await db.prepare(`SELECT * FROM ncm_rules WHERE ncm_id = ? AND uf IN (?, '') AND class_id IN (?, 0)
       ORDER BY uf <> '', class_id <> 0`).all(row.id, uf, cls?.id ?? 0);
     for (const r of rules) {
       const where = r.uf || 'todos os estados';
@@ -98,13 +98,13 @@ export function checkUf(raw) {
   return uf;
 }
 
-const productUfRow = (productId, uf) => (uf ? db.prepare('SELECT * FROM product_tax_uf WHERE product_id = ? AND uf = ?').get(Number(productId), uf) ?? null : null);
+const productUfRow = async (productId, uf) => (uf ? (await db.prepare('SELECT * FROM product_tax_uf WHERE product_id = ? AND uf = ?').get(Number(productId), uf)) ?? null : null);
 
-export const productTax = (p, uf) => resolveTax({ ncm: p.ncm, taxClassId: p.tax_class_id, uf, product: p, productUf: productUfRow(p.id, uf) });
+export const productTax = async (p, uf) => await resolveTax({ ncm: p.ncm, taxClassId: p.tax_class_id, uf, product: p, productUf: await productUfRow(p.id, uf) });
 
 // Estados em que o produto tem exceção própria, com os campos preenchidos
-function productUfList(productId) {
-  return db.prepare('SELECT * FROM product_tax_uf WHERE product_id = ? ORDER BY uf').all(Number(productId))
+async function productUfList(productId) {
+  return (await db.prepare('SELECT * FROM product_tax_uf WHERE product_id = ? ORDER BY uf').all(Number(productId)))
     .map((r) => ({ uf: r.uf, fields: STATE_TAX_FIELDS.filter((f) => r[f] !== '').map((f) => ({ field: f, label: LABELS[f], value: r[f] })) }));
 }
 
@@ -148,19 +148,19 @@ function cleanClass(b, partial) {
   return out;
 }
 
-const getNcm = (id) => {
-  const n = db.prepare('SELECT * FROM ncm WHERE id = ?').get(Number(id));
+const getNcm = async id => {
+  const n = await db.prepare('SELECT * FROM ncm WHERE id = ?').get(Number(id));
   if (!n) throw new HttpError(404, 'NCM não encontrado');
   return n;
 };
 
-const rulesOf = (ncmId) => db.prepare(`SELECT r.*, c.name AS class_name FROM ncm_rules r LEFT JOIN tax_classes c ON c.id = r.class_id
+const rulesOf = async ncmId => await db.prepare(`SELECT r.*, c.name AS class_name FROM ncm_rules r LEFT JOIN tax_classes c ON c.id = r.class_id
   WHERE r.ncm_id = ? ORDER BY r.uf <> '', r.uf, r.class_id <> 0, c.name`).all(ncmId);
 
-const productsWith = (code) => db.prepare('SELECT COUNT(*) AS n FROM products WHERE ncm = ?').get(code).n;
+const productsWith = async code => (await db.prepare('SELECT COUNT(*) AS n FROM products WHERE ncm = ?').get(code)).n;
 
 export function mountTax(admin) {
-  admin.get('/ncm', (req, res) => {
+  admin.get('/ncm', async (req, res) => {
     const where = [];
     const params = [];
     const raw = String(req.query.q ?? '').trim();
@@ -171,146 +171,151 @@ export function mountTax(admin) {
     const sql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const page = Math.max(Number(req.query.page) || 1, 1);
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM ncm n ${sql}`).get(...params).n;
-    const rows = db.prepare(`SELECT n.*, (SELECT COUNT(*) FROM ncm_rules r WHERE r.ncm_id = n.id) AS rules,
+    const total = (await db.prepare(`SELECT COUNT(*) AS n FROM ncm n ${sql}`).get(...params)).n;
+    const rows = await db.prepare(`SELECT n.*, (SELECT COUNT(*) FROM ncm_rules r WHERE r.ncm_id = n.id) AS rules,
         (SELECT COUNT(*) FROM products p WHERE p.ncm = n.code) AS products
       FROM ncm n ${sql} ORDER BY n.code LIMIT ? OFFSET ?`).all(...params, limit, (page - 1) * limit);
     res.json({
       total, page, limit, items: rows.map(ncmOut),
       // Produtos ainda não vinculados a um NCM cadastrado
-      products_no_ncm: db.prepare("SELECT COUNT(*) AS n FROM products WHERE ncm = ''").get().n,
-      products_unregistered: db.prepare("SELECT COUNT(*) AS n FROM products p WHERE p.ncm <> '' AND NOT EXISTS (SELECT 1 FROM ncm n WHERE n.code = p.ncm)").get().n,
+      products_no_ncm: (await db.prepare("SELECT COUNT(*) AS n FROM products WHERE ncm = ''").get()).n,
+      products_unregistered: (await db.prepare("SELECT COUNT(*) AS n FROM products p WHERE p.ncm <> '' AND NOT EXISTS (SELECT 1 FROM ncm n WHERE n.code = p.ncm)").get()).n,
     });
   });
 
-  admin.get('/ncm/:id', (req, res) => {
-    const n = getNcm(req.params.id);
-    res.json({ ...ncmOut(n), products: productsWith(n.code), rule_list: rulesOf(n.id) });
+  admin.get('/ncm/:id', async (req, res) => {
+    const n = await getNcm(req.params.id);
+    res.json({ ...ncmOut(n), products: await productsWith(n.code), rule_list: await rulesOf(n.id) });
   });
 
-  admin.post('/ncm', (req, res) => {
+  admin.post('/ncm', async (req, res) => {
     const data = cleanNcm(req.body, false);
-    if (db.prepare('SELECT 1 FROM ncm WHERE code = ?').get(data.code)) throw new HttpError(409, `O NCM ${data.code} já está cadastrado`);
+    if (await db.prepare('SELECT 1 FROM ncm WHERE code = ?').get(data.code)) throw new HttpError(409, `O NCM ${data.code} já está cadastrado`);
     data.search = buildSearch(data.code, data.description);
     const cols = Object.keys(data);
-    const id = db.prepare(`INSERT INTO ncm (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data)).lastInsertRowid;
-    res.status(201).json({ ...ncmOut(getNcm(id)), products: productsWith(data.code), rule_list: [] });
+    const id = (await db.prepare(`INSERT INTO ncm (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data))).lastInsertRowid;
+    res.status(201).json({ ...ncmOut(await getNcm(id)), products: await productsWith(data.code), rule_list: [] });
   });
 
-  admin.put('/ncm/:id', (req, res) => {
-    const old = getNcm(req.params.id);
+  admin.put('/ncm/:id', async (req, res) => {
+    const old = await getNcm(req.params.id);
     const data = cleanNcm(req.body, true);
     if (data.code && data.code !== old.code) {
-      if (db.prepare('SELECT 1 FROM ncm WHERE code = ?').get(data.code)) throw new HttpError(409, `O NCM ${data.code} já está cadastrado`);
-      const used = productsWith(old.code);
+      if (await db.prepare('SELECT 1 FROM ncm WHERE code = ?').get(data.code)) throw new HttpError(409, `O NCM ${data.code} já está cadastrado`);
+      const used = await productsWith(old.code);
       if (used) throw new HttpError(409, `O código não pode mudar: ${used} produto(s) usam o NCM ${old.code}`);
     }
     data.search = buildSearch(data.code ?? old.code, data.description ?? old.description);
     const cols = Object.keys(data);
-    db.prepare(`UPDATE ncm SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), old.id);
-    const n = getNcm(old.id);
-    res.json({ ...ncmOut(n), products: productsWith(n.code), rule_list: rulesOf(n.id) });
+    await db.prepare(`UPDATE ncm SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), old.id);
+    const n = await getNcm(old.id);
+    res.json({ ...ncmOut(n), products: await productsWith(n.code), rule_list: await rulesOf(n.id) });
   });
 
-  admin.delete('/ncm/:id', (req, res) => {
-    const n = getNcm(req.params.id);
-    const used = productsWith(n.code);
+  admin.delete('/ncm/:id', async (req, res) => {
+    const n = await getNcm(req.params.id);
+    const used = await productsWith(n.code);
     if (used) throw new HttpError(409, `Em uso por ${used} produto(s); para tirar das opções, desative em vez de excluir`);
-    db.prepare('DELETE FROM ncm WHERE id = ?').run(n.id); // as regras vão junto
+    await db.prepare('DELETE FROM ncm WHERE id = ?').run(n.id); // as regras vão junto
     res.status(204).end();
   });
 
   // Cria a mesma regra para um ou vários estados de uma vez. ufs: [''] = todos os estados (regra geral)
-  admin.post('/ncm/:id/rules', (req, res) => {
-    const n = getNcm(req.params.id);
+  admin.post('/ncm/:id/rules', async (req, res) => {
+    const n = await getNcm(req.params.id);
     const ufs = Array.isArray(req.body.ufs) ? [...new Set(req.body.ufs.map(checkUf))] : [];
     if (!ufs.length) throw new HttpError(400, 'Escolha ao menos um estado (ou "todos os estados")');
-    const classId = checkTaxClass(req.body.class_id) ?? 0;
+    const classId = (await checkTaxClass(req.body.class_id)) ?? 0;
     const data = cleanRule(req.body);
     if (!Object.entries(data).some(([k, v]) => k !== 'notes' && v)) throw new HttpError(400, 'Preencha ao menos um campo da regra');
-    const taken = ufs.filter((uf) => db.prepare('SELECT 1 FROM ncm_rules WHERE ncm_id = ? AND uf = ? AND class_id = ?').get(n.id, uf, classId));
+    const taken = [];
+    for (const uf of ufs) if (await db.prepare('SELECT 1 FROM ncm_rules WHERE ncm_id = ? AND uf = ? AND class_id = ?').get(n.id, uf, classId)) taken.push(uf);
     if (taken.length) throw new HttpError(409, `Já existe regra desta classificação para: ${taken.map((u) => u || 'todos os estados').join(', ')}. Edite a regra existente ou desmarque.`);
     const cols = Object.keys(data);
     const ins = db.prepare(`INSERT INTO ncm_rules (ncm_id, uf, class_id${cols.map((c) => `, ${c}`).join('')}) VALUES (?, ?, ?${cols.map(() => ', ?').join('')})`);
-    tx(() => ufs.forEach((uf) => ins.run(n.id, uf, classId, ...Object.values(data))));
-    res.status(201).json({ created: ufs.length, rule_list: rulesOf(n.id) });
+    await tx(async () => { for (const uf of ufs) await ins.run(n.id, uf, classId, ...Object.values(data)); });
+    res.status(201).json({ created: ufs.length, rule_list: await rulesOf(n.id) });
   });
 
-  admin.put('/ncm/rules/:ruleId', (req, res) => {
-    const r = db.prepare('SELECT * FROM ncm_rules WHERE id = ?').get(Number(req.params.ruleId));
+  admin.put('/ncm/rules/:ruleId', async (req, res) => {
+    const r = await db.prepare('SELECT * FROM ncm_rules WHERE id = ?').get(Number(req.params.ruleId));
     if (!r) throw new HttpError(404, 'Regra não encontrada');
     const data = cleanRule(req.body);
-    if (req.body.class_id !== undefined) data.class_id = checkTaxClass(req.body.class_id) ?? 0;
+    if (req.body.class_id !== undefined) data.class_id = (await checkTaxClass(req.body.class_id)) ?? 0;
     const merged = { ...r, ...data };
     if (!RULE_FIELDS.some((f) => merged[f])) throw new HttpError(400, 'Preencha ao menos um campo da regra');
-    if (db.prepare('SELECT 1 FROM ncm_rules WHERE ncm_id = ? AND uf = ? AND class_id = ? AND id <> ?').get(r.ncm_id, r.uf, merged.class_id, r.id)) {
+    if (await db.prepare('SELECT 1 FROM ncm_rules WHERE ncm_id = ? AND uf = ? AND class_id = ? AND id <> ?').get(r.ncm_id, r.uf, merged.class_id, r.id)) {
       throw new HttpError(409, 'Já existe outra regra deste estado com esta classificação');
     }
     const cols = Object.keys(data);
-    if (cols.length) db.prepare(`UPDATE ncm_rules SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), r.id);
-    res.json({ rule_list: rulesOf(r.ncm_id) });
+    if (cols.length) await db.prepare(`UPDATE ncm_rules SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), r.id);
+    res.json({ rule_list: await rulesOf(r.ncm_id) });
   });
 
-  admin.delete('/ncm/rules/:ruleId', (req, res) => {
-    const r = db.prepare('SELECT ncm_id FROM ncm_rules WHERE id = ?').get(Number(req.params.ruleId));
+  admin.delete('/ncm/rules/:ruleId', async (req, res) => {
+    const r = await db.prepare('SELECT ncm_id FROM ncm_rules WHERE id = ?').get(Number(req.params.ruleId));
     if (!r) throw new HttpError(404, 'Regra não encontrada');
-    db.prepare('DELETE FROM ncm_rules WHERE id = ?').run(Number(req.params.ruleId));
-    res.json({ rule_list: rulesOf(r.ncm_id) });
+    await db.prepare('DELETE FROM ncm_rules WHERE id = ?').run(Number(req.params.ruleId));
+    res.json({ rule_list: await rulesOf(r.ncm_id) });
   });
 
   // Classificações tributárias
-  const classUse = (id) => ({
-    products: db.prepare('SELECT COUNT(*) AS n FROM products WHERE tax_class_id = ?').get(id).n,
-    rules: db.prepare('SELECT COUNT(*) AS n FROM ncm_rules WHERE class_id = ?').get(id).n,
+  const classUse = async id => ({
+    products: (await db.prepare('SELECT COUNT(*) AS n FROM products WHERE tax_class_id = ?').get(id)).n,
+    rules: (await db.prepare('SELECT COUNT(*) AS n FROM ncm_rules WHERE class_id = ?').get(id)).n
   });
-  const classOut = (c) => ({ ...c, active: !!c.active, ...classUse(c.id) });
-
-  admin.get('/tax-classes', (_req, res) => {
-    res.json(db.prepare('SELECT * FROM tax_classes ORDER BY active DESC, name COLLATE NOCASE').all().map(classOut));
+  const classOut = async c => ({
+    ...c,
+    active: !!c.active,
+    ...(await classUse(c.id))
   });
 
-  const nameTaken = (name, id) => db.prepare('SELECT 1 FROM tax_classes WHERE name = ? AND id <> ?').get(name, id ?? -1);
+  admin.get('/tax-classes', async (_req, res) => {
+    res.json(await Promise.all((await db.prepare('SELECT * FROM tax_classes ORDER BY active DESC, name COLLATE NOCASE').all()).map(classOut)));
+  });
 
-  admin.post('/tax-classes', (req, res) => {
+  const nameTaken = async (name, id) => await db.prepare('SELECT 1 FROM tax_classes WHERE name = ? AND id <> ?').get(name, id ?? -1);
+
+  admin.post('/tax-classes', async (req, res) => {
     const data = cleanClass(req.body, false);
-    if (nameTaken(data.name)) throw new HttpError(409, 'Já existe uma classificação com este nome');
+    if (await nameTaken(data.name)) throw new HttpError(409, 'Já existe uma classificação com este nome');
     const cols = Object.keys(data);
-    const id = db.prepare(`INSERT INTO tax_classes (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data)).lastInsertRowid;
-    res.status(201).json(classOut(db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(id)));
+    const id = (await db.prepare(`INSERT INTO tax_classes (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data))).lastInsertRowid;
+    res.status(201).json(await classOut(await db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(id)));
   });
 
-  admin.put('/tax-classes/:id', (req, res) => {
+  admin.put('/tax-classes/:id', async (req, res) => {
     const id = Number(req.params.id);
-    if (!db.prepare('SELECT 1 FROM tax_classes WHERE id = ?').get(id)) throw new HttpError(404, 'Classificação não encontrada');
+    if (!(await db.prepare('SELECT 1 FROM tax_classes WHERE id = ?').get(id))) throw new HttpError(404, 'Classificação não encontrada');
     const data = cleanClass(req.body, true);
-    if (data.name && nameTaken(data.name, id)) throw new HttpError(409, 'Já existe uma classificação com este nome');
+    if (data.name && (await nameTaken(data.name, id))) throw new HttpError(409, 'Já existe uma classificação com este nome');
     const cols = Object.keys(data);
-    if (cols.length) db.prepare(`UPDATE tax_classes SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...Object.values(data), id);
-    res.json(classOut(db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(id)));
+    if (cols.length) await db.prepare(`UPDATE tax_classes SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...Object.values(data), id);
+    res.json(await classOut(await db.prepare('SELECT * FROM tax_classes WHERE id = ?').get(id)));
   });
 
-  admin.delete('/tax-classes/:id', (req, res) => {
+  admin.delete('/tax-classes/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const use = classUse(id);
+    const use = await classUse(id);
     if (use.products || use.rules) throw new HttpError(409, `Em uso por ${use.products} produto(s) e ${use.rules} regra(s); para tirar das opções, desative em vez de excluir`);
-    if (!db.prepare('DELETE FROM tax_classes WHERE id = ?').run(id).changes) throw new HttpError(404, 'Classificação não encontrada');
+    if (!(await db.prepare('DELETE FROM tax_classes WHERE id = ?').run(id)).changes) throw new HttpError(404, 'Classificação não encontrada');
     res.status(204).end();
   });
 
   // Tributação que vale para o formulário do produto (usa os valores ainda não salvos)
-  admin.post('/tax/resolve', (req, res) => {
+  admin.post('/tax/resolve', async (req, res) => {
     const uf = checkUf(req.body.uf);
     const id = req.body.product_id;
     res.json({
-      ...resolveTax({ ncm: req.body.ncm, taxClassId: req.body.tax_class_id || null, uf, product: req.body.overrides || null, productUf: id ? productUfRow(id, uf) : null }),
-      state_exceptions: id ? productUfList(id) : [],
+      ...(await resolveTax({ ncm: req.body.ncm, taxClassId: req.body.tax_class_id || null, uf, product: req.body.overrides || null, productUf: id ? await productUfRow(id, uf) : null })),
+      state_exceptions: id ? await productUfList(id) : [],
     });
   });
 
   // Tira a exceção do produto em um estado: ele volta a seguir o NCM e as regras
-  admin.delete('/products/:id/tax-uf/:uf', (req, res) => {
+  admin.delete('/products/:id/tax-uf/:uf', async (req, res) => {
     const uf = checkUf(req.params.uf);
-    db.prepare('DELETE FROM product_tax_uf WHERE product_id = ? AND uf = ?').run(Number(req.params.id), uf);
-    res.json({ state_exceptions: productUfList(req.params.id) });
+    await db.prepare('DELETE FROM product_tax_uf WHERE product_id = ? AND uf = ?').run(Number(req.params.id), uf);
+    res.json({ state_exceptions: await productUfList(req.params.id) });
   });
 }

@@ -1,6 +1,6 @@
 // Importação por planilha: cadastro de NCM e vínculo dos produtos com NCM, classificação e origem.
 // As duas têm prévia (não grava) e aplicação; célula vazia nunca apaga o valor atual.
-import { db } from './db.js';
+import { db, mapSeries } from './db.js';
 import { HttpError, tx } from './business.js';
 import { readGrid, norm } from './importer.js';
 import { searchText } from './dcb.js';
@@ -81,10 +81,10 @@ const looksLikeFraction = (v) => /^0\.\d{3,}$/.test(v);
 
 const NCM_FIELDS = ['cest', ...FEDERAL_FIELDS];
 
-function planNcm(rows, { updateExisting = true } = {}) {
+async function planNcm(rows, { updateExisting = true } = {}) {
   const byCode = db.prepare('SELECT * FROM ncm WHERE code = ?');
   const seen = new Map();
-  return rows.map((row) => {
+  return mapSeries(rows, async row => {
     const raw = clean(row.code);
     const item = { line: row.line, code: raw, description: clean(row.description, 500), action: 'create', id: null, warning: '', data: {} };
     // Tabelas oficiais trazem capítulos e posições (ex.: 30.04): não são NCM de produto
@@ -101,7 +101,7 @@ function planNcm(rows, { updateExisting = true } = {}) {
       }
       if (item.description) item.data.description = item.description;
       if (row.notes) item.data.notes = clean(row.notes, 2000);
-      const found = byCode.get(item.code);
+      const found = await byCode.get(item.code);
       if (!found) {
         if (!item.description) throw new HttpError(400, 'NCM novo sem descrição');
         return item;
@@ -124,30 +124,30 @@ function planNcm(rows, { updateExisting = true } = {}) {
 function productFinder() {
   const q = db.prepare('SELECT product_id FROM barcodes WHERE code = ?');
   const bySku = db.prepare('SELECT id FROM products WHERE sku = ?');
-  return (barcode, sku) => {
+  return async (barcode, sku) => {
     const d = onlyDigits(barcode.split(/[|;,\s]/)[0]);
     if (d) {
       const base = d.replace(/^0+/, '');
       for (const c of [d, base, ...[8, 12, 13, 14].map((n) => base.padStart(n, '0'))]) {
-        const r = c && q.get(c);
+        const r = c && (await q.get(c));
         if (r) return r.product_id;
       }
     }
-    return sku ? bySku.get(sku)?.id ?? null : null;
+    return sku ? (await bySku.get(sku))?.id ?? null : null;
   };
 }
 
-function planLink(rows, { linkUnregistered = true, createClasses = false } = {}) {
+async function planLink(rows, { linkUnregistered = true, createClasses = false } = {}) {
   const find = productFinder();
   const current = db.prepare('SELECT id, name, ncm, tax_class_id, tax_origin FROM products WHERE id = ?');
   const ncmExists = db.prepare('SELECT 1 FROM ncm WHERE code = ?');
   const classes = new Map();
-  for (const c of db.prepare('SELECT id, code, name FROM tax_classes').all()) {
+  for (const c of await db.prepare('SELECT id, code, name FROM tax_classes').all()) {
     classes.set(searchText(c.name), c);
     if (c.code) classes.set(searchText(c.code), c);
   }
   const seen = new Map();
-  return rows.map((row) => {
+  return mapSeries(rows, async row => {
     const barcode = clean(row.barcode);
     const sku = clean(row.sku);
     const item = { line: row.line, ref: barcode || sku, action: 'update', id: null, name: '', ncm: '', tax_class: '', tax_origin: '', warning: '', new_class: '' };
@@ -169,9 +169,9 @@ function planLink(rows, { linkUnregistered = true, createClasses = false } = {})
         else if (createClasses) item.new_class = item.tax_class;
         else throw new HttpError(400, `Classificação não cadastrada: ${item.tax_class}`);
       }
-      const id = find(barcode, sku);
+      const id = await find(barcode, sku);
       if (!id) return { ...item, action: 'not_found', error: 'produto não encontrado' };
-      const p = current.get(id);
+      const p = await current.get(id);
       item.id = id;
       item.name = p.name;
 
@@ -183,7 +183,7 @@ function planLink(rows, { linkUnregistered = true, createClasses = false } = {})
       }
       seen.set(id, { key, line: row.line });
 
-      if (item.ncm && !ncmExists.get(item.ncm)) {
+      if (item.ncm && !(await ncmExists.get(item.ncm))) {
         if (!linkUnregistered) return { ...item, action: 'skip', error: `NCM ${item.ncm} não cadastrado` };
         item.warning = `NCM ${item.ncm} não cadastrado`;
       }
@@ -221,24 +221,24 @@ export function mountTaxImport(admin, sheetUpload, { applyFields }) {
   admin.post('/ncm/import/preview', sheetUpload.single('file'), async (req, res, next) => {
     try {
       const s = await readUpload(req, NCM_COLS, (m) => m.code !== undefined, 'Não encontrei a coluna do NCM. O cabeçalho precisa ter "NCM" (e "Descrição" para os novos)');
-      const plan = planNcm(s.rows);
+      const plan = await planNcm(s.rows);
       res.json({ file: s.file, columns: s.columns, rows: s.rows, summary: countPlan(plan), plan });
     } catch (e) { next(e); }
   });
 
-  admin.post('/ncm/import/apply', (req, res) => {
+  admin.post('/ncm/import/apply', async (req, res) => {
     checkRows(req.body.rows);
-    const plan = planNcm(req.body.rows, { updateExisting: req.body.update_existing !== false });
-    tx(() => {
+    const plan = await planNcm(req.body.rows, { updateExisting: req.body.update_existing !== false });
+    await tx(async () => {
       for (const p of plan) {
         if (p.action === 'create') {
           const data = { code: p.code, ...p.data, search: searchText(`${p.code} ${p.description}`) };
           const cols = Object.keys(data);
-          db.prepare(`INSERT INTO ncm (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data));
+          await db.prepare(`INSERT INTO ncm (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(data));
         } else if (p.action === 'update') {
           const data = { ...p.data, search: searchText(`${p.code} ${p.description}`) };
           const cols = Object.keys(data);
-          db.prepare(`UPDATE ncm SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), p.id);
+          await db.prepare(`UPDATE ncm SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(data), p.id);
         }
       }
     });
@@ -250,25 +250,25 @@ export function mountTaxImport(admin, sheetUpload, { applyFields }) {
       const s = await readUpload(req, LINK_COLS,
         (m) => (m.barcode !== undefined || m.sku !== undefined) && (m.ncm !== undefined || m.tax_class !== undefined || m.tax_origin !== undefined),
         'O cabeçalho precisa ter o código de barras (ou SKU) e ao menos uma destas colunas: "NCM", "Classificação" ou "Origem"');
-      const plan = planLink(s.rows, { createClasses: req.body.create_classes === 'true', linkUnregistered: req.body.link_unregistered !== 'false' });
+      const plan = await planLink(s.rows, { createClasses: req.body.create_classes === 'true', linkUnregistered: req.body.link_unregistered !== 'false' });
       res.json({ file: s.file, columns: s.columns, rows: s.rows, summary: countPlan(plan), plan });
     } catch (e) { next(e); }
   });
 
-  admin.post('/ncm/link/apply', (req, res) => {
+  admin.post('/ncm/link/apply', async (req, res) => {
     checkRows(req.body.rows);
-    const plan = planLink(req.body.rows, { createClasses: req.body.create_classes === true, linkUnregistered: req.body.link_unregistered !== false });
+    const plan = await planLink(req.body.rows, { createClasses: req.body.create_classes === true, linkUnregistered: req.body.link_unregistered !== false });
     const classes = new Map();
-    for (const c of db.prepare('SELECT id, code, name FROM tax_classes').all()) {
+    for (const c of await db.prepare('SELECT id, code, name FROM tax_classes').all()) {
       classes.set(searchText(c.name), c.id);
       if (c.code) classes.set(searchText(c.code), c.id);
     }
     const newClasses = new Set();
-    tx(() => {
+    await tx(async () => {
       for (const p of plan) {
         if (p.action !== 'update') continue;
         if (p.new_class && !classes.has(searchText(p.new_class))) {
-          classes.set(searchText(p.new_class), Number(db.prepare('INSERT INTO tax_classes (name) VALUES (?)').run(p.new_class).lastInsertRowid));
+          classes.set(searchText(p.new_class), Number((await db.prepare('INSERT INTO tax_classes (name) VALUES (?)').run(p.new_class)).lastInsertRowid));
           newClasses.add(p.new_class);
         }
         const data = {};
@@ -276,7 +276,7 @@ export function mountTaxImport(admin, sheetUpload, { applyFields }) {
         if (p.tax_class) data.tax_class_id = classes.get(searchText(p.tax_class));
         if (p.tax_origin) data.tax_origin = p.tax_origin;
         // Vincular não conta como revisão do cadastro: não renova o prazo de atualização
-        applyFields(p.id, data, { group: null, renew: false });
+        await applyFields(p.id, data, { group: null, renew: false });
       }
     });
     res.json({ summary: countPlan(plan), classes_created: [...newClasses] });

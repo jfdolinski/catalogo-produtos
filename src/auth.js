@@ -41,7 +41,7 @@ export async function createSession(userId) {
   return token;
 }
 
-export const endSession = (token) => db.run('DELETE FROM sessions WHERE token_hash = ?', sha256(token));
+export const endSession = async token => await db.run('DELETE FROM sessions WHERE token_hash = ?', sha256(token));
 
 export function publicUser(u) {
   const perms = u.is_admin ? Object.keys(MODULES) : JSON.parse(u.permissions || '[]').filter((p) => p in MODULES);

@@ -33,14 +33,32 @@ const runner = () => store.getStore() ?? pool;
 
 // ---- Tradução do SQL ------------------------------------------------------------
 
+// "x COLLATE NOCASE" -> "lower(x)", onde x é uma coluna (p.name) ou uma chamada de função com parênteses (COALESCE(...))
+function nocase(sql) {
+  const marker = ' COLLATE NOCASE';
+  let out = sql;
+  for (let at = out.toUpperCase().indexOf(marker); at >= 0; at = out.toUpperCase().indexOf(marker)) {
+    let start = at;
+    if (out[at - 1] === ')') {
+      let depth = 0;
+      for (start = at - 1; start >= 0; start--) {
+        if (out[start] === ')') depth++;
+        else if (out[start] === '(' && --depth === 0) break;
+      }
+    }
+    while (start > 0 && /[\w.]/.test(out[start - 1])) start--;
+    out = `${out.slice(0, start)}lower(${out.slice(start, at)})${out.slice(at + marker.length)}`;
+  }
+  return out;
+}
+
 const cache = new Map();
 export function translate(sql) {
   let out = cache.get(sql);
   if (out) return out;
-  out = sql
+  out = nocase(sql)
     .replace(/\bdatetime\(/g, 'sqlite_datetime(')
     .replace(/(?<![\w.])date\(/g, 'sqlite_date(')
-    .replace(/((?:[a-z_]+\.)?[a-z_]+) COLLATE NOCASE/gi, 'lower($1)')
     .replace(/(\s)LIKE(\s)/g, '$1ILIKE$2');
   if (/INSERT OR IGNORE INTO/i.test(out)) {
     out = out.replace(/INSERT OR IGNORE INTO/i, 'INSERT INTO');
@@ -68,22 +86,36 @@ async function query(sql, params) {
   }
 }
 
+// INSERT devolve o id criado, como o lastInsertRowid do SQLite
+async function run(sql, params) {
+  const insert = /^\s*INSERT\b/i.test(sql) && !/\bRETURNING\b/i.test(sql);
+  const r = await query(insert ? `${sql.replace(/;\s*$/, '')} RETURNING *` : sql, params);
+  return { changes: r.rowCount, rows: r.rows, lastInsertRowid: insert ? r.rows[0]?.id : undefined };
+}
+
 // Mesma forma de uso de antes (db.prepare(sql).get/all/run), agora com await
 export const db = {
   prepare(sql) {
     return {
       get: async (...params) => (await query(sql, params)).rows[0],
       all: async (...params) => (await query(sql, params)).rows,
-      run: async (...params) => { const r = await query(sql, params); return { changes: r.rowCount, rows: r.rows }; },
+      run: (...params) => run(sql, params),
     };
   },
   get: async (sql, ...params) => (await query(sql, params)).rows[0],
   all: async (sql, ...params) => (await query(sql, params)).rows,
-  run: async (sql, ...params) => { const r = await query(sql, params); return { changes: r.rowCount, rows: r.rows }; },
+  run: (sql, ...params) => run(sql, params),
   // Vários comandos sem parâmetros
   exec: async (sql) => runner().query(translate(sql)),
   end: () => pool.end(),
 };
+
+// Como Array.map, mas uma de cada vez e na ordem: para laços que dependem do que as linhas anteriores fizeram
+export async function mapSeries(list, fn) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) out.push(await fn(list[i], i));
+  return out;
+}
 
 // Insere e devolve o id criado
 export async function insertId(sql, ...params) {

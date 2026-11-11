@@ -10,7 +10,7 @@ import path from 'node:path';
 import multer from 'multer';
 import yauzl from 'yauzl';
 import { XMLParser } from 'fast-xml-parser';
-import { db, STATE_TAX_FIELDS } from './db.js';
+import { db, STATE_TAX_FIELDS, mapSeries } from './db.js';
 import { HttpError, tx } from './business.js';
 import { analyzeBarcode } from './barcode.js';
 import { RATES, RULE_FIELDS, PRODUCT_OVERRIDES, LABELS, UFS, fiscalValue } from './tax.js';
@@ -185,13 +185,13 @@ function newBatch() {
   };
 }
 
-function addFile(batch, buffer, seenInDb) {
+async function addFile(batch, buffer, seenInDb) {
   batch.files++;
   const r = parseNfce(decodeXml(buffer));
   if (r.kind === 'ignored') { batch.ignored[r.reason]++; return; }
   if (r.kind === 'cancel') { batch.cancels.add(r.key); return; }
   if (batch.documents.has(r.key)) { batch.ignored.repeated++; return; }
-  if (seenInDb.get(r.key)) { batch.ignored.already_imported++; return; }
+  if (await seenInDb.get(r.key)) { batch.ignored.already_imported++; return; }
   batch.documents.set(r.key, r);
 }
 
@@ -260,8 +260,12 @@ async function buildPlan(lines, opts, deps) {
 
   // Código -> produto. Código sem cadastro vira "novo:<código>", com o outro código da mesma nota no mesmo item.
   const newByCode = new Map();
-  const productKey = (codes) => {
-    const found = codes.map((c) => findBarcode(c)?.product_id).filter(Boolean);
+  const productKey = async (codes) => {
+    const found = [];
+    for (const c of codes) {
+      const id = (await findBarcode(c))?.product_id;
+      if (id) found.push(id);
+    }
     if (new Set(found).size > 1) stats.barcode_conflicts++;
     if (found.length) return found[0];
     const known = codes.map((c) => newByCode.get(c)).find(Boolean);
@@ -278,7 +282,7 @@ async function buildPlan(lines, opts, deps) {
     if (!m.has(k) || m.get(k).at <= o.at) m.set(k, o);
   };
   let n = 0;
-  for (const r of db.prepare('SELECT * FROM xml_observations').iterate()) {
+  for (const r of await db.prepare('SELECT * FROM xml_observations').all()) {
     put(r.product_id, { uf: r.uf, emitter: r.emitter, at: r.emitted_at, simples: r.simples, data: JSON.parse(r.data) });
     if (++n % 5000 === 0) await yieldLoop();
   }
@@ -287,13 +291,13 @@ async function buildPlan(lines, opts, deps) {
   const extraCodes = new Map(); // produto -> códigos da nota que ainda não estão no cadastro
   const pendingObs = [];
   for (const l of lines.values()) {
-    const key = productKey(l.codes);
+    const key = await productKey(l.codes);
     touched.add(key);
     const o = { uf: l.uf, emitter: l.emitter, at: l.emitted_at, simples: l.simples, data: l.data };
     put(key, o);
     pendingObs.push({ key, ...o });
     for (const c of l.codes) {
-      if (!findBarcode(c)) {
+      if (!(await findBarcode(c))) {
         if (!extraCodes.has(key)) extraCodes.set(key, new Set());
         extraCodes.get(key).add(c);
       }
@@ -309,7 +313,7 @@ async function buildPlan(lines, opts, deps) {
   // Dados do cadastro: valem para o Brasil todo, então a maioria é contada entre todos os estados
   for (const [key, byUf] of obs) {
     if (skipNew(key)) continue;
-    const row = typeof key === 'number' ? getProduct.get(key) : null;
+    const row = typeof key === 'number' ? await getProduct.get(key) : null;
     if (typeof key === 'number' && !row) continue;
     const list = [...byUf.values()];
     const pick = (f) => majority(list.filter((o) => o.data[f]).map((o) => ({ value: o.data[f], at: o.at })));
@@ -394,9 +398,9 @@ async function buildPlan(lines, opts, deps) {
   for (const g of groups.values()) {
     // Só o que as notas enviadas alcançam: ajuste manual em outro NCM ou estado continua como está
     if (!g.touched) continue;
-    const ncm = g.ncm ? ncmByCode.get(g.ncm) : null;
-    const cls = g.classId ? classById.get(g.classId) : null;
-    const layers = ncm ? ruleRows.all(ncm.id, g.uf, g.classId) : [];
+    const ncm = g.ncm ? await ncmByCode.get(g.ncm) : null;
+    const cls = g.classId ? await classById.get(g.classId) : null;
+    const layers = ncm ? await ruleRows.all(ncm.id, g.uf, g.classId) : [];
     const own = layers.find((r) => r.uf === g.uf && r.class_id === g.classId) ?? null;
     const ruleChanges = {};
     for (const f of STATE_TAX_FIELDS) {
@@ -421,7 +425,7 @@ async function buildPlan(lines, opts, deps) {
         const state = productState.get(key);
         const global = PRODUCT_OVERRIDES.includes(f) ? state.row?.[f] ?? '' : '';
         const base = global || ruleValue;
-        const exception = typeof key === 'number' ? stateRow.get(key, g.uf)?.[f] ?? '' : '';
+        const exception = typeof key === 'number' ? (await stateRow.get(key, g.uf))?.[f] ?? '' : '';
         if (same(f, v[f], base)) {
           if (exception && !same(f, exception, v[f]) && opts.replace_tax) addException(key, g.uf, f, exception, '');
           continue;
@@ -433,7 +437,7 @@ async function buildPlan(lines, opts, deps) {
       }
     }
     if (Object.keys(ruleChanges).length) {
-      const covered = inherit.get(g.ncm, g.classId).n;
+      const covered = (await inherit.get(g.ncm, g.classId)).n;
       rules.push({ ncm: g.ncm, ncm_id: ncm.id, description: ncm.description, uf: g.uf, class_id: g.classId, class_name: cls?.name ?? '', rule_id: own?.id ?? null, changes: ruleChanges, products: covered });
     }
     if (n++ % 200 === 0) await yieldLoop();
@@ -447,11 +451,11 @@ function labelChanges(changes) {
 }
 const PRODUCT_LABELS = { name: 'Nome', ncm: 'NCM', tax_origin: 'Origem', anvisa_registry: 'Registro no MS', unit: 'Unidade', is_medicine: 'Medicamento' };
 
-function previewOf(job, plan) {
+async function previewOf(job, plan) {
   const b = job.batch;
   const known = new Map(plan.products.map((p) => [p.key, p.name]));
   const getName = db.prepare('SELECT name FROM products WHERE id = ?');
-  const productName = (key) => known.get(key) ?? (typeof key === 'string' ? key.slice(5) : getName.get(key)?.name ?? `#${key}`);
+  const productName = async key => known.get(key) ?? (typeof key === 'string' ? key.slice(5) : (await getName.get(key))?.name ?? `#${key}`);
   const created = plan.products.filter((p) => p.create).length;
   return {
     files: b.files, notes: b.notes, items: b.items, reform_items: b.reform_items, no_gtin: b.no_gtin, invalid_values: b.invalid_values,
@@ -467,7 +471,12 @@ function previewOf(job, plan) {
     },
     products: plan.products.slice(0, SHOWN_ROWS).map((p) => ({ id: p.id, name: p.name, create: p.create, codes: p.codes, changes: labelChanges(p.changes) })),
     rules: plan.rules.slice(0, SHOWN_ROWS).map((r) => ({ ncm: r.ncm, description: r.description, uf: r.uf, class_name: r.class_name, products: r.products, changes: labelChanges(r.changes) })),
-    exceptions: plan.exceptions.slice(0, SHOWN_ROWS).map((e) => ({ id: typeof e.key === 'number' ? e.key : null, name: productName(e.key), uf: e.uf, changes: labelChanges(e.changes) })),
+    exceptions: await mapSeries(plan.exceptions.slice(0, SHOWN_ROWS), async (e) => ({
+      id: typeof e.key === 'number' ? e.key : null,
+      name: await productName(e.key),
+      uf: e.uf,
+      changes: labelChanges(e.changes),
+    })),
     shown_limit: SHOWN_ROWS,
   };
 }
@@ -484,7 +493,7 @@ async function applyPlan(job, plan, deps, userName) {
   // Blocos curtos: a API continua respondendo durante a gravação
   async function inChunks(list, fn) {
     for (let i = 0; i < list.length; i += 200) {
-      tx(() => list.slice(i, i + 200).forEach(fn));
+      await tx(async () => { for (const item of list.slice(i, i + 200)) await fn(item); });
       progress += Math.min(200, list.length - i);
       job.progress = { done: progress, total };
       await yieldLoop();
@@ -495,62 +504,62 @@ async function applyPlan(job, plan, deps, userName) {
   let created = 0;
   for (const p of plan.products) {
     if (!p.create) continue;
-    const id = autoRegister(p.codes[0], 'Importação de NFC-e', p.changes.name?.to || '');
+    const id = await autoRegister(p.codes[0], 'Importação de NFC-e', p.changes.name?.to || '');
     if (!id) continue;
     ids.set(p.key, id);
     done.products_created++;
     if (++created % 50 === 0) await yieldLoop();
   }
 
-  await inChunks(plan.products, (p) => {
+  await inChunks(plan.products, async p => {
     const id = p.create ? ids.get(p.key) : p.id;
     if (!id) return;
     for (const code of p.codes) {
-      if (findBarcode(code)) continue;
+      if (await findBarcode(code)) continue;
       const a = analyzeBarcode(code);
-      insertBarcode(id, { code: a.code, type: a.type, note: 'NFC-e' });
+      await insertBarcode(id, { code: a.code, type: a.type, note: 'NFC-e' });
       done.barcodes++;
     }
     const data = Object.fromEntries(Object.entries(p.changes).filter(([f]) => !p.create || f !== 'name').map(([f, c]) => [f, c.to]));
-    if (Object.keys(data).length && applyFields(id, data, { group: null, renew: false }).length && !p.create) done.products_updated++;
+    if (Object.keys(data).length && (await applyFields(id, data, { group: null, renew: false })).length && !p.create) done.products_updated++;
   });
 
-  await inChunks(plan.rules, (r) => {
+  await inChunks(plan.rules, async r => {
     const cols = Object.keys(r.changes);
     const vals = cols.map((f) => r.changes[f].to);
     if (r.rule_id) {
-      db.prepare(`UPDATE ncm_rules SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...vals, r.rule_id);
+      await db.prepare(`UPDATE ncm_rules SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...vals, r.rule_id);
     } else {
-      db.prepare(`INSERT INTO ncm_rules (ncm_id, uf, class_id, ${cols.join(', ')}) VALUES (?, ?, ?, ${cols.map(() => '?').join(', ')})`)
+      await db.prepare(`INSERT INTO ncm_rules (ncm_id, uf, class_id, ${cols.join(', ')}) VALUES (?, ?, ?, ${cols.map(() => '?').join(', ')})`)
         .run(r.ncm_id, r.uf, r.class_id, ...vals);
     }
     done.rules++;
   });
 
-  await inChunks(plan.exceptions, (e) => {
+  await inChunks(plan.exceptions, async e => {
     const id = realId(e.key);
     if (!id) return;
     const cols = Object.keys(e.changes);
     const vals = cols.map((f) => e.changes[f].to);
-    db.prepare(`INSERT INTO product_tax_uf (product_id, uf, ${cols.join(', ')}) VALUES (?, ?, ${cols.map(() => '?').join(', ')})
+    await db.prepare(`INSERT INTO product_tax_uf (product_id, uf, ${cols.join(', ')}) VALUES (?, ?, ${cols.map(() => '?').join(', ')})
       ON CONFLICT(product_id, uf) DO UPDATE SET ${cols.map((c) => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`).run(id, e.uf, ...vals);
     // Sem nenhum campo próprio, a linha deixa de existir
-    db.prepare(`DELETE FROM product_tax_uf WHERE product_id = ? AND uf = ? AND ${STATE_TAX_FIELDS.map((f) => `${f} = ''`).join(' AND ')}`).run(id, e.uf);
+    await db.prepare(`DELETE FROM product_tax_uf WHERE product_id = ? AND uf = ? AND ${STATE_TAX_FIELDS.map((f) => `${f} = ''`).join(' AND ')}`).run(id, e.uf);
     done.exceptions++;
   });
 
-  await inChunks(plan.observations, (o) => {
+  await inChunks(plan.observations, async o => {
     const id = realId(o.key);
     if (!id) return;
-    db.prepare(`INSERT INTO xml_observations (product_id, uf, emitter, emitted_at, simples, data) VALUES (?, ?, ?, ?, ?, ?)
+    await db.prepare(`INSERT INTO xml_observations (product_id, uf, emitter, emitted_at, simples, data) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(product_id, uf, emitter) DO UPDATE SET emitted_at = excluded.emitted_at, simples = excluded.simples, data = excluded.data
       WHERE excluded.emitted_at >= xml_observations.emitted_at`).run(id, o.uf, o.emitter, o.at, o.simples, JSON.stringify(o.data));
   });
 
   // Por último: se a gravação parar antes, as mesmas notas podem ser enviadas de novo
-  const importId = Number(db.prepare('INSERT INTO xml_imports (user_name, summary) VALUES (?, ?)').run(userName, JSON.stringify({ notes: job.batch.notes, ...done })).lastInsertRowid);
-  await inChunks([...job.batch.documents.values()], (n) => {
-    db.prepare('INSERT OR IGNORE INTO xml_documents (access_key, import_id, uf, emitter, emitted_at) VALUES (?, ?, ?, ?, ?)').run(n.key, importId, n.uf, n.emitter, n.emittedAt);
+  const importId = Number((await db.prepare('INSERT INTO xml_imports (user_name, summary) VALUES (?, ?)').run(userName, JSON.stringify({ notes: job.batch.notes, ...done }))).lastInsertRowid);
+  await inChunks([...job.batch.documents.values()], async n => {
+    await db.prepare('INSERT OR IGNORE INTO xml_documents (access_key, import_id, uf, emitter, emitted_at) VALUES (?, ?, ?, ?, ?)').run(n.key, importId, n.uf, n.emitter, n.emittedAt);
   });
   return done;
 }
@@ -576,10 +585,10 @@ function jobOut() {
 
 async function readUploads(j, files) {
   const seen = db.prepare('SELECT 1 FROM xml_documents WHERE access_key = ?');
-  const seenInDb = { get: (k) => seen.get(k) };
+  const seenInDb = { get: async k => await seen.get(k) };
   let sinceYield = Date.now();
   const onXml = async (buffer) => {
-    addFile(j.batch, buffer, seenInDb);
+    await addFile(j.batch, buffer, seenInDb);
     j.progress = { done: j.batch.files, total: null };
     if (Date.now() - sinceYield > 15) { await yieldLoop(); sinceYield = Date.now(); }
   };
@@ -601,7 +610,7 @@ export function mountNfceImport(admin, deps) {
 
   const replan = async (j) => {
     j.plan = await buildPlan(j.lines, j.options, deps);
-    j.preview = previewOf(j, j.plan);
+    j.preview = await previewOf(j, j.plan);
   };
 
   admin.get('/xml-import', (_req, res) => res.json(jobOut()));
