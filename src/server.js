@@ -17,6 +17,7 @@ import { cleanBody, cleanField, cleanLine } from './text.js';
 import { textCleanupSummary } from './text-cleanup.js';
 import { mountAppDevices, DOWNLOADS_DIR } from './app-devices.js';
 import { auditAppWrites, mountAppAudit } from './app-audit.js';
+import { mountSignup } from './signup.js';
 import { analyzeBarcode } from './barcode.js';
 import { readSpreadsheet, FIELD_LABELS } from './importer.js';
 import { providers, lookupOne } from './lookup.js';
@@ -655,11 +656,17 @@ app.post('/api/auth/login', async (req, res) => {
   const u = login && (await db.prepare('SELECT * FROM users WHERE login = ?').get(login));
   if (!u || !u.active || !verifyPassword(password, u.password_hash)) {
     loginFailed(key);
+    // Senha certa, cadastro pelo site ainda não aprovado: diz o motivo (só para quem sabe a senha)
+    if (u && !u.active && u.signup_at && !u.last_login_at && verifyPassword(password, u.password_hash)) {
+      throw new HttpError(403, 'Seu cadastro está aguardando a aprovação do administrador.');
+    }
     throw new HttpError(401, 'Login ou senha incorretos');
   }
   loginOk(key);
   res.json({ token: await createSession(u.id), user: publicUser(u) });
 });
+
+mountSignup(app);
 
 app.post('/api/auth/logout', async (req, res) => {
   const t = bearer(req);

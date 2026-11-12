@@ -26,7 +26,28 @@
         <button class="primary">Entrar</button>
         <button type="button" id="login-switch" class="link small">Entrar com o token de administração</button>
         <p id="login-error" class="error"></p>
+        <button type="button" id="signup-open" class="link small">Não tem acesso? <strong>Cadastre-se</strong></button>
       </form>
+      <form id="signup-form" class="card hidden" novalidate>
+        <img src="marca.svg" alt="" class="login-logo" width="72" height="72">
+        <h1>Cadastre-se</h1>
+        <p class="muted small">Informe seu e-mail, uma senha e o CNPJ da sua empresa. O acesso é liberado depois que um administrador aprovar o cadastro.</p>
+        <div class="login-fields">
+          <label class="signup-label">E-mail<input id="signup-email" type="email" autocomplete="email" maxlength="60" required></label>
+          <label class="signup-label">Senha (mínimo 8 caracteres)<input id="signup-pass" type="password" autocomplete="new-password" minlength="8" required></label>
+          <label class="signup-label">Repita a senha<input id="signup-pass2" type="password" autocomplete="new-password" minlength="8" required></label>
+          <label class="signup-label">CNPJ da empresa<input id="signup-cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18" required></label>
+        </div>
+        <button class="primary" id="signup-submit">Enviar cadastro</button>
+        <button type="button" id="signup-back" class="link small">Já tenho acesso: entrar</button>
+        <p id="signup-error" class="error" role="alert"></p>
+      </form>
+      <div id="signup-done" class="card hidden" role="status">
+        <img src="marca.svg" alt="" class="login-logo" width="72" height="72">
+        <h1>Cadastro recebido</h1>
+        <p id="signup-done-text"></p>
+        <button type="button" id="signup-done-back" class="primary">Voltar para o login</button>
+      </div>
       <a href="/consulta/" class="login-public">🔎 Consultar produtos sem login →</a>
     </div>
   </section>
@@ -82,6 +103,7 @@
             <select id="co-status">
               <option value="">Todas</option>
               <option value="ativa">Ativas</option>
+              <option value="pendente">Pendentes (cadastro pelo site)</option>
               <option value="suspensa">Suspensas</option>
               <option value="cancelada">Canceladas</option>
             </select>
@@ -150,6 +172,7 @@
                 <label>Situação
                   <select name="status">
                     <option value="ativa">Ativa (API liberada)</option>
+                    <option value="pendente">Pendente (cadastro pelo site, API bloqueada)</option>
                     <option value="suspensa">Suspensa (API bloqueada)</option>
                     <option value="cancelada">Cancelada</option>
                   </select>
@@ -481,9 +504,10 @@
         <button type="button" id="us-new" class="primary">+ Novo usuário</button>
       </div>
       <p id="us-msg" class="msg"></p>
+      <p id="us-pending" class="msg hidden" role="status"></p>
       <div class="panel">
         <table class="dash-table">
-          <thead><tr><th>Nome</th><th>Login</th><th>Permissões</th><th>Último acesso</th><th></th></tr></thead>
+          <thead><tr><th>Nome</th><th>Login</th><th>Empresa</th><th>Permissões</th><th>Último acesso</th><th></th></tr></thead>
           <tbody id="us-rows"></tbody>
         </table>
       </div>

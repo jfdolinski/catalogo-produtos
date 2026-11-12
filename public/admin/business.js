@@ -9,7 +9,7 @@ const maskCnpj = (s) => onlyDigits(s).slice(0, 14)
   .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
 const fmtPeriod = (p) => { const [y, m] = p.split('-'); return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
 const fmtIsoDay = (d) => (d ? d.split('-').reverse().join('/') : '');
-const STATUS_LABEL = { ativa: 'Ativa', suspensa: 'Suspensa', cancelada: 'Cancelada' };
+const STATUS_LABEL = { ativa: 'Ativa', pendente: 'Pendente', suspensa: 'Suspensa', cancelada: 'Cancelada' };
 
 // =================================================================== Empresas
 const co = { items: [], current: null, plans: [], timer: null };
@@ -455,13 +455,17 @@ async function loadUsers() {
   const d = await api('GET', '/api/admin/users');
   us.items = d.items;
   us.modules = d.modules;
-  $('#us-rows').innerHTML = us.items.length ? us.items.map((u) => `<tr class="${u.active ? '' : 'muted'}">
-    <td>${esc(u.name)}${u.active ? '' : ' <span class="small">(inativo)</span>'}${state.user?.id === u.id ? ' <span class="small muted">(você)</span>' : ''}</td>
+  const pending = us.items.filter((u) => u.pending).length;
+  $('#us-pending').textContent = pending ? `${pending} cadastro(s) pelo site aguardando aprovação: abra, escolha os módulos, marque "Ativo" e salve.` : '';
+  $('#us-pending').classList.toggle('hidden', !pending);
+  $('#us-rows').innerHTML = us.items.length ? us.items.map((u) => `<tr class="${u.active || u.pending ? '' : 'muted'}">
+    <td>${esc(u.name)}${u.pending ? ' <span class="st st-pendente">aguardando aprovação</span>' : u.active ? '' : ' <span class="small">(inativo)</span>'}${state.user?.id === u.id ? ' <span class="small muted">(você)</span>' : ''}</td>
     <td><code>${esc(u.login)}</code></td>
+    <td class="small">${u.company_name ? esc(u.company_name) : '<span class="muted">—</span>'}</td>
     <td class="small">${u.is_admin ? '<strong>Administrador</strong>' : u.permissions.map((p) => esc(us.modules[p]?.split(' (')[0] || p)).join(', ') || '<span class="muted">nenhuma</span>'}</td>
     <td class="small muted">${u.last_login_at ? fmtDate(u.last_login_at) : 'nunca'}</td>
     <td><button type="button" data-user="${u.id}">Editar</button></td></tr>`).join('')
-    : '<tr><td colspan="5" class="muted small">Nenhum usuário. Crie o primeiro (marque "Administrador" para acesso total).</td></tr>';
+    : '<tr><td colspan="6" class="muted small">Nenhum usuário. Crie o primeiro (marque "Administrador" para acesso total).</td></tr>';
   $('#us-rows').querySelectorAll('[data-user]').forEach((b) => b.addEventListener('click', () => openUser(us.items.find((u) => u.id === Number(b.dataset.user)))));
 }
 

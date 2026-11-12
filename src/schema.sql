@@ -439,3 +439,8 @@ CREATE TABLE IF NOT EXISTS app_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_app_audit_product ON app_audit(product_id, id);
 CREATE INDEX IF NOT EXISTS idx_app_audit_user ON app_audit(user_id, id);
+
+-- Cadastro pelo site ("Cadastre-se"): o usuário fica ligado à empresa do CNPJ informado e inativo até um
+-- administrador aprovar em Usuários. signup_at marca quem veio por esse caminho.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id integer REFERENCES companies(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_at text;

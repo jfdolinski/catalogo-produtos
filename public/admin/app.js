@@ -97,6 +97,53 @@ function logout() {
 }
 
 $('#login-switch').addEventListener('click', () => setLoginMode(loginMode === 'user' ? 'token' : 'user'));
+
+// ---- Cadastre-se: e-mail, senha e CNPJ; a conta fica aguardando a aprovação de um administrador
+function showSignup(which) {
+  $('#login-form').classList.toggle('hidden', which !== 'login');
+  $('#signup-form').classList.toggle('hidden', which !== 'form');
+  $('#signup-done').classList.toggle('hidden', which !== 'done');
+  $('#signup-error').textContent = '';
+  if (which === 'form') $('#signup-email').focus();
+}
+const cnpjMask = (v) => {
+  const d = v.replace(/\D/g, '').slice(0, 14);
+  return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+};
+$('#signup-open').addEventListener('click', () => showSignup('form'));
+$('#signup-back').addEventListener('click', () => showSignup('login'));
+$('#signup-done-back').addEventListener('click', () => { showSignup('login'); $('#login-pass').focus(); });
+$('#signup-cnpj').addEventListener('input', (e) => { e.target.value = cnpjMask(e.target.value); });
+$('#signup-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('#signup-email').value.trim();
+  const password = $('#signup-pass').value;
+  const err = (m, el) => { $('#signup-error').textContent = m; el?.focus(); };
+  if (!/^\S+@\S+\.\S+$/.test(email)) return err('Informe um e-mail válido.', $('#signup-email'));
+  if (password.length < 8) return err('A senha deve ter ao menos 8 caracteres.', $('#signup-pass'));
+  if (password !== $('#signup-pass2').value) return err('As senhas não conferem.', $('#signup-pass2'));
+  if ($('#signup-cnpj').value.replace(/\D/g, '').length !== 14) return err('O CNPJ tem 14 números.', $('#signup-cnpj'));
+  const btn = $('#signup-submit');
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, cnpj: $('#signup-cnpj').value }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `Erro ${res.status}`);
+    $('#signup-done-text').textContent = `${d.message} Empresa: ${d.company.name.startsWith('CNPJ ') ? d.company.cnpj_formatted : `${d.company.name} (${d.company.cnpj_formatted})`}. Para entrar, use o e-mail ${d.email}.`;
+    $('#login-user').value = d.email;
+    $('#signup-form').reset();
+    showSignup('done');
+  } catch (ex) {
+    err(ex.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar cadastro';
+  }
+});
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('#login-error').textContent = '';

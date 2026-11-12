@@ -390,6 +390,10 @@ No painel: **⇄ Mesclar cadastros**, clique nos itens **na ordem** e confirme. 
   para o principal, inclusive em mesclagens encadeadas.
 - Não há desfazer.
 
+## Cadastre-se
+
+Na tela de login, **Cadastre-se** pede e-mail, senha e o CNPJ da empresa (`POST /api/auth/signup`). A conta é criada com o e-mail como login, **inativa e sem permissões**, ligada à empresa do CNPJ: se ela já está em Empresas, usa essa; se não, busca os dados na Receita e cria a empresa como **pendente** (sem chave de API e fora do faturamento). Quem tenta entrar antes da aprovação vê "Seu cadastro está aguardando a aprovação do administrador" (só com a senha certa). Em **Usuários**, os cadastros pendentes aparecem primeiro, com a empresa: abra, escolha os módulos, marque Ativo e salve. A empresa nova continua pendente até ser revisada em Empresas. Limites: 5 cadastros por hora por IP; e-mail repetido e CNPJ com dígito errado são recusados; empresa cancelada não aceita cadastro.
+
 ## Acesso: consulta pública e login com permissões
 
 - **Consulta pública** (`/consulta/`): busca por código de barras, nome, marca ou categoria, sem login.

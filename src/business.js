@@ -72,8 +72,14 @@ function invoiceOut(r) {
 
 export function mountBusiness(admin) {
   // ---- Usuários ----------------------------------------------------------------
-  const USER_FIELDS = 'id, name, login, permissions, is_admin, active, created_at, updated_at, last_login_at';
-  const userOut = (u) => ({ ...publicUser(u), created_at: iso(u.created_at), last_login_at: iso(u.last_login_at) });
+  const USER_FIELDS = `id, name, login, permissions, is_admin, active, created_at, updated_at, last_login_at, company_id, signup_at,
+    (SELECT COALESCE(NULLIF(c.nome_fantasia, ''), c.razao_social) FROM companies c WHERE c.id = users.company_id) AS company_name`;
+  const userOut = (u) => ({
+    ...publicUser(u), created_at: iso(u.created_at), last_login_at: iso(u.last_login_at),
+    company_id: u.company_id ?? null, company_name: u.company_name ?? null, signup_at: iso(u.signup_at),
+    // Veio do "Cadastre-se" e ainda não foi aprovado (nunca entrou e está inativo)
+    pending: !!u.signup_at && !u.active && !u.last_login_at,
+  });
 
   admin.get('/me', (req, res) => res.json({ user: req.user, modules: MODULES }));
 
@@ -86,7 +92,9 @@ export function mountBusiness(admin) {
   });
 
   admin.get('/users', async (_req, res) => {
-    res.json({ modules: MODULES, items: (await db.prepare(`SELECT ${USER_FIELDS} FROM users ORDER BY name COLLATE NOCASE, id`).all()).map(userOut) });
+    // Cadastros aguardando aprovação primeiro
+    res.json({ modules: MODULES, items: (await db.prepare(`SELECT ${USER_FIELDS} FROM users
+      ORDER BY (signup_at IS NOT NULL AND active = 0 AND last_login_at IS NULL) DESC, name COLLATE NOCASE, id`).all()).map(userOut) });
   });
 
   function cleanUser(b, isNew) {
@@ -200,7 +208,8 @@ export function mountBusiness(admin) {
   const COMPANY_FIELDS = ['razao_social', 'nome_fantasia', 'situacao', 'abertura', 'natureza_juridica', 'porte', 'cnae',
     'inscricao_estadual', 'ie_situacao', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'cep',
     'telefone', 'email', 'contato_nome', 'contato_email', 'contato_telefone', 'notes', 'data_source'];
-  const STATUSES = ['ativa', 'suspensa', 'cancelada'];
+  // pendente: criada pelo "Cadastre-se", aguardando o administrador conferir (sem acesso à API nem fatura)
+  const STATUSES = ['ativa', 'pendente', 'suspensa', 'cancelada'];
 
   async function companyOut(c) {
     const plan = c.plan_id ? await db.prepare('SELECT * FROM plans WHERE id = ?').get(c.plan_id) : null;

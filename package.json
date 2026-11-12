@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
-    "test": "node tests/geral.test.mjs && node tests/nomes.test.mjs && node tests/espacos.test.mjs && node tests/nfce.test.mjs && node tests/catalogo.test.mjs && node tests/desempenho.test.mjs && node tests/app.test.mjs",
+    "test": "node tests/geral.test.mjs && node tests/nomes.test.mjs && node tests/espacos.test.mjs && node tests/nfce.test.mjs && node tests/catalogo.test.mjs && node tests/desempenho.test.mjs && node tests/app.test.mjs && node tests/cadastro.test.mjs",
     "db:local": "node scripts/pg-local.mjs 5433 data/pg-local"
   },
   "engines": {

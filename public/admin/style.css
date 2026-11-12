@@ -530,3 +530,9 @@ code.wrap { word-break: break-all; }
 .values-table .num { text-align: right; white-space: nowrap; }
 .values-table input { width: 100%; }
 .values-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Cadastre-se */
+.signup-label { display: grid; gap: 4px; font-size: 13px; text-align: left; }
+#signup-form h1, #signup-done h1 { text-align: center; }
+#signup-done p { line-height: 1.5; }
+.st-pendente { border-color: #b45309; color: #b45309; }
