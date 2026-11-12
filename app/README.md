@@ -8,6 +8,10 @@ Atualiza cadastros pelo celular Android, usando a câmera:
 
 React Native com Expo, a mesma base do app Flow. Usa as rotas do painel (`/api/admin/...`) com o token do aparelho, então vale o que o usuário pode fazer no painel (módulo **Atualização** ou **Produtos**).
 
+## Auditoria (localização)
+
+Cada alteração enviada pelo app leva a posição do celular (cabeçalhos `X-Geo-Lat`, `X-Geo-Lon`, `X-Geo-Precisao`, `X-Geo-Momento`), e o servidor grava em `app_audit` com o usuário e o aparelho. A permissão é pedida ao abrir o app, só com o app em uso (sem localização em segundo plano). Sem permissão ou sem GPS em 4 segundos, a alteração vai sem posição: nunca deixa de gravar por causa disso (`src/localizacao.ts`).
+
 ## Vínculo do celular (como no Flow)
 
 - No painel, o usuário clica em **📱 Aplicativo** (no alto) e aparece um QR code `catalogo://vincular?servidor=...&codigo=...`. O código vale 10 minutos e uma vez só; gerar outro invalida o anterior.

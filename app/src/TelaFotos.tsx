@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CameraView } from 'expo-camera';
+import type { Produto } from './api';
 import { Botao, cores } from './ui';
 
 const MAXIMO = 10;
@@ -9,7 +10,8 @@ const MAXIMO = 10;
  * Câmera para as fotos do produto: tira quantas quiser (até 10), mostra as miniaturas
  * (toque numa miniatura para descartar) e devolve os arquivos ao concluir.
  */
-export function TelaFotos({ titulo, aoConcluir, aoCancelar }: { titulo: string; aoConcluir: (uris: string[]) => void; aoCancelar: () => void }) {
+export function TelaFotos({ produto, aoConcluir, aoCancelar }: { produto: Produto; aoConcluir: (uris: string[]) => void; aoCancelar: () => void }) {
+  const codigos = produto.barcodes.map((b) => b.code).join(' · ');
   const camera = useRef<CameraView>(null);
   const [fotos, setFotos] = useState<string[]>([]);
   const [pronta, setPronta] = useState(false);
@@ -35,7 +37,10 @@ export function TelaFotos({ titulo, aoConcluir, aoCancelar }: { titulo: string; 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <View style={estilos.topo}>
-        <Text style={estilos.titulo} numberOfLines={2}>{titulo}</Text>
+        {/* Para conferir que a foto é do produto certo antes de fotografar */}
+        <Text style={estilos.titulo} numberOfLines={2}>{produto.name}</Text>
+        <Text style={estilos.detalhe} numberOfLines={1}>Código: {codigos || 'sem código'}</Text>
+        <Text style={estilos.detalhe} numberOfLines={1}>Fabricante: {produto.manufacturer || 'não informado'}{produto.brand ? `  ·  Marca: ${produto.brand}` : ''}</Text>
       </View>
       <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={lanterna} onCameraReady={() => setPronta(true)} />
       {fotos.length ? (
@@ -77,6 +82,7 @@ export function TelaFotos({ titulo, aoConcluir, aoCancelar }: { titulo: string; 
 const estilos = StyleSheet.create({
   topo: { padding: 12, backgroundColor: cores.branco },
   titulo: { fontSize: 16, fontWeight: '700', color: cores.texto },
+  detalhe: { fontSize: 13, color: cores.suave, marginTop: 2 },
   miniaturas: { flexGrow: 0, backgroundColor: '#111' },
   miniatura: { width: 64, height: 64, borderRadius: 6 },
   descartar: { position: 'absolute', top: 2, right: 4, color: '#fff', fontWeight: '700', textShadowColor: '#000', textShadowRadius: 3 },

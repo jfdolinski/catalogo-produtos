@@ -13,6 +13,7 @@ const liberarHttp = (config) =>
   });
 
 const usoDaCamera = 'A câmera lê o QR code de vínculo e o código de barras e tira as fotos dos produtos.';
+const usoDaLocalizacao = 'A localização é gravada junto com cada alteração de cadastro, para auditoria.';
 
 module.exports = {
   expo: {
@@ -28,16 +29,18 @@ module.exports = {
       versionCode,
       adaptiveIcon: { foregroundImage: './assets/icone-frente.png', backgroundColor: '#0f172a' },
       // REQUEST_INSTALL_PACKAGES: abrir o instalador do Android com a versão nova (atualização automática)
-      permissions: ['android.permission.CAMERA', 'android.permission.REQUEST_INSTALL_PACKAGES'],
-      blockedPermissions: ['android.permission.RECORD_AUDIO'],
+      permissions: ['android.permission.CAMERA', 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION'],
+      // Só com o app aberto: nada de localização em segundo plano
+      blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.ACCESS_BACKGROUND_LOCATION'],
     },
     ios: {
       bundleIdentifier: 'br.com.catalogo.app',
-      infoPlist: { NSCameraUsageDescription: usoDaCamera },
+      infoPlist: { NSCameraUsageDescription: usoDaCamera, NSLocationWhenInUseUsageDescription: usoDaLocalizacao },
     },
     plugins: [
       ['expo-camera', { cameraPermission: usoDaCamera, microphonePermission: false, recordAudioAndroid: false }],
       'expo-secure-store',
+      ['expo-location', { locationWhenInUsePermission: usoDaLocalizacao, isAndroidBackgroundLocationEnabled: false, isIosBackgroundLocationEnabled: false }],
       ...(testeHttp ? [liberarHttp] : []),
     ],
     extra: { testeHttp },

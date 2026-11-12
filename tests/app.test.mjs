@@ -80,6 +80,24 @@ try {
   ok('corrige nome com espaços tratados', edit.s === 200 && edit.b.name === 'Café Torrado 500 g', edit.b?.name);
   ok('marca como revisado', (await cel('POST', `/api/admin/products/${created.b.id}/resolve`)).s === 200);
 
+  // Auditoria: alterações do app ficam com usuário, aparelho e posição
+  const geo = { 'X-Geo-Lat': '-25.4284', 'X-Geo-Lon': '-49.2733', 'X-Geo-Precisao': '12.5', 'X-Geo-Momento': '2026-11-12T10:00:00Z' };
+  const comGeo = await fetch(`${base}/api/admin/products/${created.b.id}`, { method: 'PUT', headers: { Authorization: `Bearer ${link.b.token}`, 'Content-Type': 'application/json', ...geo }, body: JSON.stringify({ brand: 'Bom Dia' }) });
+  ok('edição com posição responde normalmente', comGeo.status === 200);
+  await api('PUT', `/api/admin/products/${created.b.id}`, { brand: 'Bom Dia' }); // pelo painel: não entra na auditoria do app
+  await new Promise((r) => setTimeout(r, 300)); // a linha é gravada logo depois da resposta
+  const aud = await api('GET', `/api/admin/app-audit?product_id=${created.b.id}`);
+  const edicao = aud.b.items.find((a) => a.action === 'edicao');
+  ok('auditoria registra a edição com usuário, aparelho e posição', edicao && edicao.user_login === 'ana' && edicao.device_name === 'Moto G84'
+    && edicao.latitude === -25.4284 && edicao.longitude === -49.2733 && edicao.accuracy_m === 12.5 && edicao.located_at === '2026-11-12T10:00:00.000Z', edicao);
+  ok('auditoria registra fotos, foto principal e revisado (sem posição: vazia)', ['fotos', 'foto_principal', 'revisado'].every((a) => aud.b.items.some((x) => x.action === a && x.latitude === null)), aud.b.items.map((x) => x.action));
+  ok('alteração feita pelo painel não entra na auditoria do app', aud.b.items.filter((a) => a.action === 'edicao').length === 2, aud.b.items.length);
+  const ruim = await fetch(`${base}/api/admin/products/${created.b.id}/resolve`, { method: 'POST', headers: { Authorization: `Bearer ${link.b.token}`, 'X-Geo-Lat': '999', 'X-Geo-Lon': 'abc' } });
+  await new Promise((r) => setTimeout(r, 300));
+  const ultimo = (await api('GET', `/api/admin/app-audit?product_id=${created.b.id}&limit=1`)).b.items[0];
+  ok('posição inválida é ignorada, sem impedir a gravação', ruim.status === 200 && ultimo.action === 'revisado' && ultimo.latitude === null, ultimo);
+  ok('consulta da auditoria só para administrador', (await ana('GET', '/api/admin/app-audit')).s === 403);
+
   // Cadastro na hora pelo app
   const novo = gtin('789555000111');
   const reg = await cel('POST', '/api/admin/products', { name: 'Sabonete 90g', brand: 'Flor', barcodes: [novo] });

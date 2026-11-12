@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { useCameraPermissions } from 'expo-camera';
 import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, type Origem, type Produto, type Sessao } from './api';
 import { baixarEInstalar, versaoInstalada, versaoNova } from './atualizacao';
+import { pedirPermissaoLocalizacao } from './localizacao';
 import { LeitorCodigo } from './LeitorCodigo';
 import { codigoDeBarras, gtinValido } from './regras';
 import { TelaFotos } from './TelaFotos';
@@ -160,6 +161,8 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   // sozinho, ao abrir e sempre que o app volta para a frente.
   useEffect(() => {
     api.eu().catch(() => undefined);
+    // Posição para a auditoria das alterações: pede uma vez; negada, o app segue sem posição
+    void pedirPermissaoLocalizacao();
     const conferir = () => {
       if (Platform.OS !== 'android') return;
       void versaoNova(sessao.servidor).then((v) => {
@@ -205,8 +208,10 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
       const achou = await api.porCodigo(r.codigo);
       setDigitado('');
       if (achou.found && achou.product) {
-        // Achou: vai direto para a câmera das fotos
-        await fotografar(achou.product);
+        // Achou: com foto real, mostra as fotos (e o cadastro); sem foto, vai direto para a câmera
+        const temFoto = achou.product.images.some((i) => !i.placeholder && i.id !== null);
+        if (temFoto) setTela({ qual: 'produto', produto: achou.product });
+        else await fotografar(achou.product);
       } else setTela({ qual: 'novo', codigo: r.codigo });
     } catch (e) {
       setTela({ qual: 'ler' });
@@ -251,7 +256,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   }
   if (tela.qual === 'fotos') {
     const produto = tela.produto;
-    return <TelaFotos titulo={produto.name} aoConcluir={(uris) => void enviar(produto, uris)} aoCancelar={() => setTela({ qual: 'produto', produto })} />;
+    return <TelaFotos produto={produto} aoConcluir={(uris) => void enviar(produto, uris)} aoCancelar={() => setTela({ qual: 'produto', produto })} />;
   }
 
   const voltarParaLeitura = (texto: string | null = null) => {

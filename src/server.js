@@ -16,6 +16,7 @@ import { mountCatalog } from './catalog-cache.js';
 import { cleanBody, cleanField, cleanLine } from './text.js';
 import { textCleanupSummary } from './text-cleanup.js';
 import { mountAppDevices, DOWNLOADS_DIR } from './app-devices.js';
+import { auditAppWrites, mountAppAudit } from './app-audit.js';
 import { analyzeBarcode } from './barcode.js';
 import { readSpreadsheet, FIELD_LABELS } from './importer.js';
 import { providers, lookupOne } from './lookup.js';
@@ -686,12 +687,15 @@ admin.use(async (req, _res, next) => {
   if (req.body && typeof req.body === 'object') req.body = cleanBody(req.body);
   next();
 });
+// Alterações feitas pelo aplicativo: usuário, aparelho e posição para auditoria (app-audit.js)
+admin.use(auditAppWrites);
 
 admin.get('/check', (req, res) => res.json({ ok: true, user: req.user }));
 admin.get('/text-cleanup', async (_req, res) => res.json(await textCleanupSummary())); // sem regra de permissão: só administrador
 mountBusiness(admin);
 mountTax(admin);
 mountAppDevices(app, admin, baseUrl);
+mountAppAudit(admin);
 
 admin.get('/products', async (req, res) => {
   const r = await searchProducts(req.query);

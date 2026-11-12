@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { File, UploadType } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { cabecalhosDePosicao } from './localizacao';
 import type { Sugestao } from './regras';
 
 /** Lado maior das fotos enviadas: nítido para o catálogo e leve na rede móvel (de ~4 MB para ~300 KB). */
@@ -36,6 +37,7 @@ export interface Produto {
   name: string;
   brand: string | null;
   unit: string | null;
+  manufacturer: string | null;
   category: string | null;
   barcodes: { id: number; code: string }[];
   images: Imagem[];
@@ -105,7 +107,7 @@ async function reduzir(uri: string): Promise<string> {
   return salva.uri;
 }
 
-async function pedir<T>(servidor: string, caminho: string, opcoes: { metodo?: string; corpo?: unknown; form?: FormData; token?: string; limiteMs?: number }): Promise<T> {
+async function pedir<T>(servidor: string, caminho: string, opcoes: { metodo?: string; corpo?: unknown; form?: FormData; token?: string; limiteMs?: number; extras?: Record<string, string> }): Promise<T> {
   const controle = new AbortController();
   const limite = setTimeout(() => controle.abort(), opcoes.limiteMs ?? 60_000);
   let resposta: Response;
@@ -117,6 +119,7 @@ async function pedir<T>(servidor: string, caminho: string, opcoes: { metodo?: st
         Accept: 'application/json',
         ...(opcoes.corpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(opcoes.token ? { Authorization: `Bearer ${opcoes.token}` } : {}),
+        ...opcoes.extras,
       },
       body: opcoes.form ?? (opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo)),
     });
@@ -149,7 +152,9 @@ export async function versaoPublicada(servidor: string): Promise<string | null> 
 export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
   async function chamar<T>(caminho: string, opcoes: { metodo?: string; corpo?: unknown; form?: FormData; limiteMs?: number } = {}): Promise<T> {
     try {
-      return await pedir<T>(sessao.servidor, `/api/admin${caminho}`, { ...opcoes, token: sessao.token });
+      // Alterações levam a posição do celular, gravada pelo servidor na auditoria junto com o usuário
+      const extras = opcoes.metodo && opcoes.metodo !== 'GET' ? await cabecalhosDePosicao() : undefined;
+      return await pedir<T>(sessao.servidor, `/api/admin${caminho}`, { ...opcoes, token: sessao.token, extras });
     } catch (e) {
       if (e instanceof ErroApi && e.status === 401) aoExpirar();
       throw e;
@@ -199,7 +204,7 @@ export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
             uploadType: UploadType.MULTIPART,
             fieldName: 'images',
             mimeType: 'image/jpeg',
-            headers: { Authorization: `Bearer ${sessao.token}`, Accept: 'application/json' },
+            headers: { Authorization: `Bearer ${sessao.token}`, Accept: 'application/json', ...(await cabecalhosDePosicao()) },
           });
         } catch (e) {
           const detalhe = e instanceof Error && e.message ? ` (${e.message.slice(0, 120)})` : '';
