@@ -130,6 +130,47 @@ try {
   ok('campo sem sugestão é recusado', (await api('GET', '/api/admin/field-values/password_hash')).s === 400);
   ok('sem permissão de produtos não vê sugestões', (await bia('GET', '/api/admin/field-values/brand')).s === 403);
 
+  // Planilha Nomes: marca, fabricante e categoria editáveis e filtráveis
+  const lab = await api('POST', '/api/admin/products', { name: 'Dipirona 500mg', brand: 'Genérico', manufacturer: 'EMS', category: 'Medicamentos', barcodes: [gtin('789100031580')] });
+  const semMarca = await api('POST', '/api/admin/products', { name: 'Produto sem marca', barcodes: [gtin('789100031590')] });
+  const linhas = await api('GET', `/api/admin/product-names?q=Dipirona`);
+  ok('planilha traz fabricante e categoria', linhas.b.items[0].manufacturer === 'EMS' && linhas.b.items[0].category === 'Medicamentos', linhas.b.items[0]);
+  const porFab = await api('GET', '/api/admin/product-names?manufacturer=EMS');
+  ok('filtra por fabricante', porFab.b.total === 1 && porFab.b.items[0].id === lab.b.id, porFab.b.total);
+  const vazios = await api('GET', '/api/admin/product-names?brand=__vazio__');
+  ok('filtra produtos sem marca', vazios.b.items.some((r) => r.id === semMarca.b.id) && vazios.b.items.every((r) => !r.brand), vazios.b.total);
+  ok('busca também pelo fabricante', (await api('GET', '/api/admin/product-names?q=EMS')).b.total === 1);
+  const celulas = await api('POST', '/api/admin/product-names', { items: [
+    { id: lab.b.id, field: 'brand', value: '  Genérico   EMS ', original: 'Genérico' },
+    { id: lab.b.id, field: 'category', value: 'Farmácia', original: 'Medicamentos' },
+    { id: semMarca.b.id, field: 'manufacturer', value: 'Fábrica X', original: '' },
+  ] });
+  ok('grava marca, categoria e fabricante pela planilha', celulas.s === 200 && celulas.b.saved.length === 3, celulas.b);
+  const depois = await api('GET', `/api/admin/products/${lab.b.id}`);
+  ok('valores gravados com espaços tratados', depois.b.brand === 'Genérico EMS' && depois.b.category === 'Farmácia', depois.b.brand);
+  const conflito = await api('POST', '/api/admin/product-names', { items: [{ id: lab.b.id, field: 'brand', value: 'Outra', original: 'Genérico' }] });
+  ok('conflito por coluna quando outra pessoa alterou', conflito.b.conflicts.length === 1 && conflito.b.conflicts[0].field === 'brand' && conflito.b.conflicts[0].current === 'Genérico EMS', conflito.b);
+  ok('marca pode ficar vazia; nome não', (await api('POST', '/api/admin/product-names', { items: [{ id: lab.b.id, field: 'brand', value: '', original: 'Genérico EMS' }] })).s === 200
+    && (await api('POST', '/api/admin/product-names', { items: [{ id: lab.b.id, field: 'name', value: ' ', original: 'Dipirona 500mg' }] })).s === 400);
+  ok('coluna fora da lista é recusada', (await api('POST', '/api/admin/product-names', { items: [{ id: lab.b.id, field: 'ncm', value: '1', original: '' }] })).s === 400);
+  ok('formato antigo (só nome) continua valendo', (await api('POST', '/api/admin/product-names', { items: [{ id: lab.b.id, name: 'Dipirona 500 mg', original: 'Dipirona 500mg' }] })).b.saved[0].name === 'Dipirona 500 mg');
+
+  // Marcas e categorias: renomear e juntar
+  const fab = await api('GET', '/api/admin/field-values/manufacturer?empty=1');
+  ok('fabricantes com a contagem dos vazios', fab.b.items.some((v) => v.value === 'EMS') && fab.b.empty > 0, fab.b);
+  const ren = await api('POST', '/api/admin/field-values/brand/rename', { from: 'Bom Gosto', to: 'Bom  Gosto Ltda' });
+  ok('renomeia uma marca', ren.s === 200 && ren.b.products === 1 && !ren.b.merged_into_existing, ren.b);
+  const junta = await api('POST', '/api/admin/field-values/brand/rename', { from: 'Bom Gosto Ltda', to: 'Bom Dia' });
+  ok('renomear para marca existente junta os produtos', junta.b.merged_into_existing === true && (await api('GET', '/api/admin/product-names?brand=Bom%20Dia')).b.total === 3, junta.b);
+  ok('valor inexistente: 404', (await api('POST', '/api/admin/field-values/brand/rename', { from: 'Não existe', to: 'X' })).s === 404);
+  ok('só marca, fabricante e categoria', (await api('POST', '/api/admin/field-values/unit/rename', { from: 'UN', to: 'X' })).s === 400);
+  // Sessão nova: desativar o usuário (acima) encerrou as sessões dele
+  const ana2 = as((await post('/api/auth/login', { login: 'ana', password: 'senha-forte-1' })).b.token);
+  const semPerm = await ana2('POST', '/api/admin/field-values/brand/rename', { from: 'Bom Dia', to: 'X' });
+  ok('renomear exige permissão de Produtos', semPerm.s === 403, semPerm);
+  const tirar = await api('POST', '/api/admin/field-values/category/rename', { from: 'Farmácia', to: '' });
+  ok('renomear para vazio tira o valor', tirar.b.products === 1 && (await api('GET', `/api/admin/products/${lab.b.id}`)).b.category === '', tirar.b);
+
   ok('rota de download sem APK responde 404', (await fetch(`${base}/downloads/catalogo-app.apk`)).status === 404);
 } catch (e) {
   ok('sem exceção', false, e.stack);

@@ -520,3 +520,13 @@ code.wrap { word-break: break-all; }
 .brand-name { display: inline-flex; align-items: center; gap: 8px; }
 .brand-logo { width: 28px; height: 28px; border-radius: 7px; flex: none; }
 .login-logo { display: block; width: 72px; height: 72px; margin: 0 auto 8px; border-radius: 16px; }
+
+/* Planilha Nomes: filtros por valor */
+.sheet-toolbar .sheet-vfilter { flex: 0 1 150px; }
+/* Marcas e categorias */
+.values-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0; }
+.values-toolbar input { flex: 1 1 260px; max-width: 420px; }
+.values-table td:first-child { width: 55%; }
+.values-table .num { text-align: right; white-space: nowrap; }
+.values-table input { width: 100%; }
+.values-actions { display: flex; flex-wrap: wrap; gap: 6px; }

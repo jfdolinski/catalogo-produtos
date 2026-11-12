@@ -235,9 +235,13 @@ Os dados já gravados foram limpos uma vez, ao iniciar o serviço (`src/text-cle
 `GET /api/admin/text-cleanup` (só administrador). Em campo de valor único, se a limpeza criaria duplicidade, o valor antigo foi mantido e registrado.
 Ficaram de fora o login, as faturas e as estatísticas de consulta.
 
+## Marcas e categorias
+
+A tela **Marcas e categorias** (`/#/valores`, permissão "Produtos") lista as marcas, os fabricantes/laboratórios e as categorias em uso, com a quantidade de produtos de cada um. **Renomear** corrige a grafia em todos os produtos de uma vez; renomear para um valor que já existe junta os dois; deixar vazio tira o valor dos produtos. **Ver produtos** abre a planilha Nomes filtrada. Rotas: `GET /api/admin/field-values/:campo?q=&limit=&empty=1` e `POST /api/admin/field-values/:campo/rename` (`{ from, to }`). Os mesmos valores alimentam as sugestões dos campos Marca, Fabricante e Categoria no cadastro.
+
 ## Nomes dos produtos (planilha)
 
-A tela **Nomes** (`/#/nomes`, permissão "Produtos") mostra o catálogo como uma planilha. Só a coluna Nome é editável; as alterações ficam
+A tela **Nomes** (`/#/nomes`, permissão "Produtos") mostra o catálogo como uma planilha. São editáveis Nome, Marca, Fabricante e Categoria (as três últimas sugerem os valores já cadastrados), e dá para filtrar por marca, fabricante e categoria (digite `(vazio)` para ver os produtos sem o valor); as alterações ficam
 na tela, em amarelo, até **Salvar** (Ctrl+S). Salvar não renova o prazo de atualização do produto, nem o tira da lista de pendentes.
 
 | Teclas | Ação |

@@ -203,7 +203,11 @@ async function getProduct(id, base, { onlyActive = false } = {}) {
 }
 
 // WHERE da busca de produtos (texto, categoria e filtros ?nome=1), compartilhado por lista, ids e edição em massa
-function buildWhere({ q, category, onlyActive, ...flags }) {
+// Filtro por valor exato de marca, fabricante ou categoria; EMPTY_VALUE = sem valor preenchido
+const EMPTY_VALUE = '__vazio__';
+const VALUE_FILTERS = ['brand', 'manufacturer', 'category'];
+
+function buildWhere({ q, onlyActive, ...flags }) {
   const where = [];
   const params = [];
   if (onlyActive) where.push('p.active = 1');
@@ -211,13 +215,17 @@ function buildWhere({ q, category, onlyActive, ...flags }) {
     const v = flags[name];
     if (v === '1' || v === 'true' || v === true || v === 1) where.push(sql());
   }
-  if (category) { where.push('p.category = ?'); params.push(category); }
+  for (const f of VALUE_FILTERS) {
+    const v = typeof flags[f] === 'string' ? flags[f] : '';
+    if (v === EMPTY_VALUE) where.push(`p.${f} = ''`);
+    else if (v) { where.push(`p.${f} = ?`); params.push(v); }
+  }
   if (q) {
     const like = `%${q}%`;
-    where.push(`(p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ? OR p.brand LIKE ? OR p.category LIKE ? OR p.ncm LIKE ?
+    where.push(`(p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ? OR p.brand LIKE ? OR p.manufacturer LIKE ? OR p.category LIKE ? OR p.ncm LIKE ?
       OR EXISTS (SELECT 1 FROM barcodes b WHERE b.product_id = p.id AND b.code LIKE ?)
       OR EXISTS (SELECT 1 FROM product_dcb pd JOIN dcb d ON d.id = pd.dcb_id WHERE pd.product_id = p.id AND d.search LIKE ?))`);
-    params.push(like, like, like, like, like, like, like, `%${searchText(q)}%`);
+    params.push(like, like, like, like, like, like, like, like, `%${searchText(q)}%`);
   }
   return { sqlWhere: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
@@ -692,17 +700,38 @@ admin.get('/products', async (req, res) => {
 
 // Valores já cadastrados de marca, categoria e unidade (sugestões nos campos do painel e do aplicativo), mais usados primeiro.
 // ?q= filtra por trecho (sem diferenciar maiúsculas); sem q, devolve os mais usados.
-const VALUE_FIELDS = { brand: 'brand', category: 'category', unit: 'unit' };
+const VALUE_FIELDS = { brand: 'brand', manufacturer: 'manufacturer', category: 'category', unit: 'unit' };
 admin.get('/field-values/:field', async (req, res) => {
   const col = VALUE_FIELDS[req.params.field];
-  if (!col) throw new HttpError(400, 'Campo sem sugestões: use brand, category ou unit');
+  if (!col) throw new HttpError(400, 'Campo sem sugestões: use brand, manufacturer, category ou unit');
   const q = cleanLine(req.query.q || '');
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 1000);
   const rows = await db.prepare(`SELECT ${col} AS value, COUNT(*) AS products FROM products
     WHERE ${col} <> ''${q ? ` AND ${col} LIKE ?` : ''} GROUP BY ${col}
     ORDER BY ${q ? `(lower(${col}) LIKE ?) DESC, ` : ''}COUNT(*) DESC, ${col} LIMIT ?`)
     .all(...(q ? [`%${q}%`, `${q.toLowerCase()}%`] : []), limit);
+  if (req.query.empty === '1') {
+    const n = (await db.prepare(`SELECT COUNT(*) AS n FROM products WHERE ${col} = ''`).get()).n;
+    return res.json({ items: rows, empty: n });
+  }
   res.json(rows);
+});
+
+// Renomeia (ou junta) um valor de marca, fabricante ou categoria em todos os produtos que o usam.
+// "to" vazio tira o valor dos produtos. Cada produto passa pela gravação normal (datas por campo), sem renovar prazo.
+admin.post('/field-values/:field/rename', async (req, res) => {
+  const col = { brand: 'brand', manufacturer: 'manufacturer', category: 'category' }[req.params.field];
+  if (!col) throw new HttpError(400, 'Só marca, fabricante e categoria podem ser renomeados');
+  const from = cleanLine(String(req.body.from ?? ''));
+  const to = cleanLine(String(req.body.to ?? ''));
+  if (!from) throw new HttpError(400, 'Informe o valor atual');
+  if (to.length > 120) throw new HttpError(400, 'Valor novo com mais de 120 caracteres');
+  if (from === to) throw new HttpError(400, 'O valor novo é igual ao atual');
+  const ids = (await db.prepare(`SELECT id FROM products WHERE ${col} = ? ORDER BY id`).all(from)).map((r) => r.id);
+  if (!ids.length) throw new HttpError(404, 'Nenhum produto com esse valor (pode ter sido alterado por outra pessoa)');
+  const merged = to ? (await db.prepare(`SELECT COUNT(*) AS n FROM products WHERE ${col} = ?`).get(to)).n : 0;
+  await tx(async () => { for (const id of ids) await applyFields(id, { [col]: to }, { renew: false }); });
+  res.json({ products: ids.length, merged_into_existing: merged > 0, existing: merged });
 });
 
 // Aplicativo: produto pelo código de barras lido na câmera ou digitado. Não conta como consulta nem cadastra.
@@ -738,8 +767,13 @@ async function mergeHistory(targetId) {
 }
 
 // Planilha de nomes: uma linha leve por produto, em blocos, para rolar pelo catálogo inteiro
-const NAME_SORTS = { id: 'p.id', code: 'code', name: 'p.name COLLATE NOCASE', brand: 'p.brand COLLATE NOCASE' };
+const NAME_SORTS = {
+  id: 'p.id', code: 'code', name: 'p.name COLLATE NOCASE', brand: 'p.brand COLLATE NOCASE',
+  manufacturer: 'p.manufacturer COLLATE NOCASE', category: 'p.category COLLATE NOCASE',
+};
 const MAX_NAME_LENGTH = 300;
+// Colunas editáveis da planilha: nome (obrigatório) e os dados gerais de texto curto
+const SHEET_FIELDS = { name: { label: 'nome', max: MAX_NAME_LENGTH, required: true }, brand: { label: 'marca', max: 120 }, manufacturer: { label: 'fabricante', max: 120 }, category: { label: 'categoria', max: 120 } };
 const MAX_NAMES_PER_SAVE = 2000;
 
 admin.get('/product-names', async (req, res) => {
@@ -749,7 +783,7 @@ admin.get('/product-names', async (req, res) => {
   const dir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
   const sort = NAME_SORTS[req.query.sort] ?? NAME_SORTS.name;
   const total = (await db.prepare(`SELECT COUNT(*) AS n FROM products p ${sqlWhere}`).get(...params)).n;
-  const items = await db.prepare(`SELECT p.id, p.name, p.brand, p.active,
+  const items = await db.prepare(`SELECT p.id, p.name, p.brand, p.manufacturer, p.category, p.active,
       (SELECT b.code FROM barcodes b WHERE b.product_id = p.id ORDER BY b.id LIMIT 1) AS code,
       (SELECT COUNT(*) FROM barcodes b WHERE b.product_id = p.id) AS codes,
       ${PENDING_SQL} AS pending
@@ -757,32 +791,38 @@ admin.get('/product-names', async (req, res) => {
   res.json({ total, offset, items });
 });
 
-// Grava nomes em lote. "original" é o nome que a tela mostrava: se mudou no servidor, aquele item não é gravado
+// Grava células da planilha em lote: { id, field, value, original } (sem field = nome, como antes).
+// "original" é o valor que a tela mostrava: se mudou no servidor, aquela célula não é gravada
 // e volta como conflito, para ninguém apagar sem ver a alteração de outra pessoa.
 admin.post('/product-names', async (req, res) => {
   const items = req.body.items;
-  if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nenhum nome para gravar');
-  if (items.length > MAX_NAMES_PER_SAVE) throw new HttpError(400, `Envie até ${MAX_NAMES_PER_SAVE} nomes de cada vez`);
+  if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Nada para gravar');
+  if (items.length > MAX_NAMES_PER_SAVE) throw new HttpError(400, `Envie até ${MAX_NAMES_PER_SAVE} células de cada vez`);
   const clean = items.map((it) => {
-    const name = String(it?.name ?? '').trim();
+    const field = it?.field ?? 'name';
+    const spec = SHEET_FIELDS[field];
+    if (!spec) throw new HttpError(400, `Coluna não editável: ${field}`);
+    const value = cleanLine(String(it?.value ?? it?.name ?? ''));
     const id = Number(it?.id);
     if (!Number.isInteger(id)) throw new HttpError(400, 'Produto inválido');
-    if (!name) throw new HttpError(400, `Produto #${id}: o nome é obrigatório`);
-    if (name.length > MAX_NAME_LENGTH) throw new HttpError(400, `Produto #${id}: nome com mais de ${MAX_NAME_LENGTH} caracteres`);
-    return { id, name, original: String(it.original ?? '') };
+    if (spec.required && !value) throw new HttpError(400, `Produto #${id}: o ${spec.label} é obrigatório`);
+    if (value.length > spec.max) throw new HttpError(400, `Produto #${id}: ${spec.label} com mais de ${spec.max} caracteres`);
+    // original sem tratamento: é comparado com o valor gravado, que pode ser antigo e ter espaços sobrando
+    return { id, field, value, original: String(it.original ?? '') };
   });
-  const current = db.prepare('SELECT name FROM products WHERE id = ?');
   const out = { saved: [], conflicts: [], missing: [] };
   await tx(async () => {
     for (const it of clean) {
-      const row = await current.get(it.id);
-      if (!row) out.missing.push(it.id);
-      else if (row.name === it.name) out.saved.push({ id: it.id, name: it.name });
-      else if (row.name !== it.original) out.conflicts.push({ id: it.id, current: row.name });
+      const row = await db.prepare(`SELECT ${it.field} AS v FROM products WHERE id = ?`).get(it.id);
+      const cur = row ? String(row.v ?? '') : null;
+      const item = { id: it.id, field: it.field, value: it.value, name: it.field === 'name' ? it.value : undefined };
+      if (cur === null) out.missing.push(it.id);
+      else if (cur === it.value) out.saved.push(item);
+      else if (cur !== it.original) out.conflicts.push({ id: it.id, field: it.field, current: cur });
       else {
-        // Corrigir o nome não é revisar o cadastro: não renova o prazo de atualização
-        await applyFields(it.id, { name: it.name }, { group: null, renew: false });
-        out.saved.push({ id: it.id, name: it.name });
+        // Corrigir na planilha não é revisar o cadastro: não renova o prazo de atualização
+        await applyFields(it.id, { [it.field]: it.value }, { group: null, renew: false });
+        out.saved.push(item);
       }
     }
   });
@@ -1674,7 +1714,7 @@ admin.post('/bulk', async (req, res) => {
     : req.body.filter && typeof req.body.filter === 'object' ? await productIds(req.body.filter) : [];
   if (!ids.length) throw new HttpError(400, 'Nenhum produto selecionado');
   const set = {};
-  for (const f of ['category', 'brand', 'unit']) if (typeof req.body.set?.[f] === 'string') set[f] = req.body.set[f].trim();
+  for (const f of ['category', 'brand', 'manufacturer', 'unit']) if (typeof req.body.set?.[f] === 'string') set[f] = req.body.set[f].trim();
   if (typeof req.body.set?.active === 'boolean') set.active = req.body.set.active ? 1 : 0;
   if (typeof req.body.set?.ncm === 'string') set.ncm = req.body.set.ncm.trim() ? cleanNcmCode(req.body.set.ncm) : '';
   if (req.body.set?.tax_class_id !== undefined) set.tax_class_id = await checkTaxClass(req.body.set.tax_class_id);

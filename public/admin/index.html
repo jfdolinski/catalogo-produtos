@@ -40,6 +40,7 @@
           <a href="#/" data-view="dashboard" data-perm="dashboard">Dashboard</a>
           <a href="#/produtos" data-view="produtos" data-perm="produtos">Produtos</a>
           <a href="#/nomes" data-view="nomes" data-perm="produtos">Nomes</a>
+          <a href="#/valores" data-view="valores" data-perm="produtos">Marcas e categorias</a>
           <a href="#/atualizar" data-view="atualizar" data-perm="atualizacao">Atualização</a>
           <a href="#/ncm" data-view="ncm" data-perm="ncm">NCM</a>
           <a href="#/dcb" data-view="dcb" data-perm="dcb">DCB</a>
@@ -164,6 +165,32 @@
     </section>
 
     <!-- NCM -->
+    <!-- Marcas, fabricantes e categorias: renomear ou juntar valores em todos os produtos -->
+    <section id="values" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>Marcas e categorias</h1>
+          <div class="muted small">Corrija a grafia ou junte valores repetidos: a alteração vale para todos os produtos que usam o valor. Renomear para um valor que já existe junta os dois.</div>
+        </div>
+      </div>
+      <div class="upd-tabs" role="tablist">
+        <button type="button" data-vfield="brand" class="active" role="tab">Marcas</button>
+        <button type="button" data-vfield="manufacturer" role="tab">Fabricantes / laboratórios</button>
+        <button type="button" data-vfield="category" role="tab">Categorias</button>
+      </div>
+      <div class="values-toolbar">
+        <input id="values-q" type="search" placeholder="Buscar" aria-label="Buscar valores">
+        <span id="values-info" class="muted small"></span>
+      </div>
+      <p id="values-msg" class="msg" role="alert"></p>
+      <div class="dash-table-wrap">
+        <table class="dash-table values-table">
+          <thead><tr><th>Valor</th><th class="num">Produtos</th><th>Ações</th></tr></thead>
+          <tbody id="values-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="names" class="page hidden">
       <div class="sheet-toolbar">
         <h1>Nomes dos produtos</h1>
@@ -174,6 +201,9 @@
           <option value="pending">Pendentes</option>
           <option value="inactive">Inativos</option>
         </select>
+        <input id="sheet-f-brand" class="sheet-vfilter" list="brands" placeholder="Marca" aria-label="Filtrar por marca" title="Digite (vazio) para ver os produtos sem marca" autocomplete="off">
+        <input id="sheet-f-manufacturer" class="sheet-vfilter" list="manufacturers" placeholder="Fabricante" aria-label="Filtrar por fabricante ou laboratório" title="Digite (vazio) para ver os produtos sem fabricante" autocomplete="off">
+        <input id="sheet-f-category" class="sheet-vfilter" list="categories" placeholder="Categoria" aria-label="Filtrar por categoria" title="Digite (vazio) para ver os produtos sem categoria" autocomplete="off">
         <div class="actions">
           <button type="button" id="sheet-undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled>↶</button>
           <button type="button" id="sheet-redo" title="Refazer (Ctrl+Y)" aria-label="Refazer" disabled>↷</button>
@@ -186,7 +216,7 @@
         <span class="sheet-fx" aria-hidden="true">fx</span>
         <input id="sheet-formula" aria-label="Conteúdo da célula atual" autocomplete="off">
       </div>
-      <div id="sheet-scroll" class="sheet-scroll" tabindex="0" role="grid" aria-label="Planilha de nomes dos produtos" aria-colcount="6">
+      <div id="sheet-scroll" class="sheet-scroll" tabindex="0" role="grid" aria-label="Planilha de nomes, marcas, fabricantes e categorias dos produtos" aria-colcount="8">
         <div id="sheet-head" class="sheet-head" role="row"></div>
         <div id="sheet-canvas" class="sheet-canvas">
           <div id="sheet-rows" class="sheet-rows" role="rowgroup"></div>
@@ -902,8 +932,8 @@
         <div class="prod-pane" data-pane="general">
           <div id="review-data" class="review-item"></div>
           <div class="grid">
-            <label>Marca<input name="brand"><small class="fd" data-field="brand"></small></label>
-            <label>Fabricante / laboratório<input name="manufacturer"><small class="fd" data-field="manufacturer"></small></label>
+            <label>Marca<input name="brand" list="brands"><small class="fd" data-field="brand"></small></label>
+            <label>Fabricante / laboratório<input name="manufacturer" list="manufacturers"><small class="fd" data-field="manufacturer"></small></label>
             <label>Categoria<input name="category" list="categories"><small class="fd" data-field="category"></small></label>
             <label>SKU / Código interno<input name="sku"><small class="fd" data-field="sku"></small></label>
             <label>Unidade de medida<input name="unit" placeholder="UN, CX, KG, ML..." list="units"><small class="fd" data-field="unit"></small></label>
@@ -922,6 +952,8 @@
             </div>
           </div>
           <datalist id="categories"></datalist>
+          <datalist id="brands"></datalist>
+          <datalist id="manufacturers"></datalist>
           <datalist id="units"><option value="UN"><option value="CX"><option value="FR"><option value="BL"><option value="TB"><option value="KG"><option value="G"><option value="L"><option value="ML"><option value="PCT"></datalist>
         </div>
 
@@ -1288,5 +1320,6 @@
   <script src="ncm-import.js"></script>
   <script src="xml-import.js"></script>
   <script src="names.js"></script>
+  <script src="values.js"></script>
 </body>
 </html>

@@ -1,19 +1,24 @@
-// Tela Nomes: manutenção do nome dos produtos em formato de planilha.
+// Tela Nomes: manutenção do nome, marca, fabricante e categoria dos produtos em formato de planilha.
 // Só as linhas visíveis ficam na página, então rola pelo catálogo inteiro. As alterações ficam na tela até "Salvar".
 // Usa $, api, esc, fmtN e goProduct de app.js, e setMsg de update.js.
+// editable: a coluna aceita edição; max: tamanho máximo; required: não pode ficar vazia; list: sugestões (datalist)
 const SHEET_COLS = [
   { key: 'id', label: 'ID', width: 76, sortable: true, num: true },
-  { key: 'code', label: 'Código de barras', width: 170, sortable: true },
-  { key: 'name', label: 'Nome', width: 520, sortable: true, editable: true },
-  { key: 'brand', label: 'Marca', width: 170, sortable: true },
-  { key: 'status', label: 'Situação', width: 110 },
+  { key: 'code', label: 'Código de barras', width: 150, sortable: true },
+  { key: 'name', label: 'Nome', width: 420, sortable: true, editable: true, required: true, max: 300 },
+  { key: 'brand', label: 'Marca', width: 160, sortable: true, editable: true, max: 120, list: 'brands' },
+  { key: 'manufacturer', label: 'Fabricante', width: 160, sortable: true, editable: true, max: 120, list: 'manufacturers' },
+  { key: 'category', label: 'Categoria', width: 150, sortable: true, editable: true, max: 120, list: 'categories' },
+  { key: 'status', label: 'Situação', width: 100 },
 ];
-const NAME_COL = SHEET_COLS.findIndex((c) => c.editable);
+const NAME_COL = SHEET_COLS.findIndex((c) => c.key === 'name');
+const COL_BY_KEY = Object.fromEntries(SHEET_COLS.map((c) => [c.key, c]));
+const VALUE_FILTERS = ['brand', 'manufacturer', 'category'];
+const EMPTY_FILTER = '__vazio__';
 const SHEET_ROW = 26;
 const SHEET_NUM_WIDTH = 60;
 const SHEET_PAGE = 200;
 const SHEET_SAVE_BATCH = 2000;
-const SHEET_MAX_NAME = 300;
 
 const sheet = {
   rows: [], byId: new Map(), total: 0, generation: 0, loading: new Map(), loadTimer: null, searchTimer: null,
@@ -26,14 +31,22 @@ const scroller = $('#sheet-scroll');
 const editor = $('#sheet-editor');
 const formula = $('#sheet-formula');
 
-const shownName = (row) => (sheet.dirty.has(row.id) ? sheet.dirty.get(row.id).name : row.name);
-const invalidName = (name) => !name.trim() || name.trim().length > SHEET_MAX_NAME;
+// Alterações por célula: chave "id|campo"
+const dirtyKey = (id, field) => `${id}|${field}`;
+const shown = (row, field) => {
+  const d = sheet.dirty.get(dirtyKey(row.id, field));
+  return d ? d.value : String(row[field] ?? '');
+};
+const invalidValue = (field, value) => {
+  const col = COL_BY_KEY[field];
+  return (col.required && !value.trim()) || value.trim().length > col.max;
+};
 const colLeft = (c) => SHEET_NUM_WIDTH + SHEET_COLS.slice(0, c).reduce((sum, col) => sum + col.width, 0);
 const sheetWidth = () => colLeft(SHEET_COLS.length);
 const columnLetter = (c) => String.fromCharCode(65 + c);
 
 function cellText(row, key) {
-  if (key === 'name') return shownName(row);
+  if (COL_BY_KEY[key]?.editable) return shown(row, key);
   if (key === 'code') return row.code ? row.code + (row.codes > 1 ? ` +${row.codes - 1}` : '') : '';
   if (key === 'status') return row.active ? (row.pending ? 'Pendente' : 'Ativo') : 'Inativo';
   return String(row[key] ?? '');
@@ -55,6 +68,10 @@ function sheetQuery(offset) {
   if (q) params.set('q', q);
   const filter = $('#sheet-filter').value;
   if (filter) params.set(filter, '1');
+  for (const f of VALUE_FILTERS) {
+    const v = $(`#sheet-f-${f}`).value.trim();
+    if (v) params.set(f, v === '(vazio)' ? EMPTY_FILTER : v);
+  }
   return params;
 }
 
@@ -139,9 +156,9 @@ function drawSheet() {
       if (row) {
         text = cellText(row, col.key);
         if (col.editable) {
-          const change = sheet.dirty.get(row.id);
+          const change = sheet.dirty.get(dirtyKey(row.id, col.key));
           if (change) classes.push(change.conflict ? 'is-conflict' : 'is-dirty');
-          if (change && invalidName(change.name)) classes.push('is-error');
+          if (change && invalidValue(col.key, change.value)) classes.push('is-error');
         }
         if (col.key === 'status' && !row.active) classes.push('muted');
       }
@@ -169,13 +186,13 @@ function drawChrome(sel) {
   if (!sheet.editing && !sheet.barEditing) formula.value = row ? cellText(row, col.key) : '';
   formula.readOnly = !(row && col.editable);
   const changed = sheet.dirty.size;
-  const invalid = [...sheet.dirty.values()].filter((d) => invalidName(d.name)).length;
+  const invalid = [...sheet.dirty.values()].filter((d) => invalidValue(d.field, d.value)).length;
   const lines = sel.r2 - sel.r1 + 1;
   $('#sheet-status').textContent = [
     `${fmtN(sheet.total)} produto(s)`,
     lines > 1 ? `${fmtN(lines)} linhas selecionadas` : '',
     changed ? `${fmtN(changed)} alterado(s), ainda não salvo(s)` : 'Nada a salvar',
-    invalid ? `${fmtN(invalid)} sem nome válido` : '',
+    invalid ? `${fmtN(invalid)} célula(s) inválida(s)` : '',
   ].filter(Boolean).join(' · ');
   const save = $('#sheet-save');
   save.textContent = sheet.saving ? 'Salvando…' : changed ? `Salvar (${fmtN(changed)})` : 'Salvar';
@@ -215,20 +232,23 @@ function moveTo(r, c, { extend = false } = {}) {
 
 // ---- Alterações -----------------------------------------------------------------
 
-function setDirty(id, name, original) {
-  if (name === original) sheet.dirty.delete(id);
-  else sheet.dirty.set(id, { name, original });
+function setDirty(id, field, value, original) {
+  const key = dirtyKey(id, field);
+  if (value === original) sheet.dirty.delete(key);
+  else sheet.dirty.set(key, { id, field, value, original });
 }
 
-// Aplica uma lista { row, name } como um único passo de desfazer
-function applyNames(list) {
+// Aplica uma lista { row, field, value } como um único passo de desfazer
+function applyCells(list) {
   const step = [];
-  for (const { row, name } of list) {
-    const value = name.replace(/\s+/g, ' ').trim(); // o mesmo tratamento do servidor, para a célula já mostrar como vai ficar
-    const before = shownName(row);
+  for (const { row, field, value: raw } of list) {
+    if (!COL_BY_KEY[field]?.editable) continue;
+    const value = String(raw ?? '').replace(/\s+/g, ' ').trim(); // o mesmo tratamento do servidor, para a célula já mostrar como vai ficar
+    const before = shown(row, field);
     if (value === before) continue;
-    step.push({ id: row.id, before, after: value, original: sheet.dirty.get(row.id)?.original ?? row.name });
-    setDirty(row.id, value, step[step.length - 1].original);
+    const original = sheet.dirty.get(dirtyKey(row.id, field))?.original ?? String(row[field] ?? '');
+    step.push({ id: row.id, field, before, after: value, original });
+    setDirty(row.id, field, value, original);
   }
   if (step.length) {
     sheet.undo.push(step);
@@ -241,33 +261,37 @@ function applyNames(list) {
 function replay(from, to, side) {
   const step = from.pop();
   if (!step) return;
-  step.forEach((c) => setDirty(c.id, c[side], c.original));
+  step.forEach((c) => setDirty(c.id, c.field, c[side], c.original));
   to.push(step);
   drawSheet();
 }
 
-async function selectedRowsForNames() {
+const ONLY_EDITABLE = 'Só as colunas Nome, Marca, Fabricante e Categoria podem ser alteradas.';
+
+// Linhas e colunas editáveis da seleção (null se nenhuma coluna da seleção é editável)
+async function selectedCells() {
   const sel = selection();
-  if (NAME_COL < sel.c1 || NAME_COL > sel.c2) return null;
+  const fields = SHEET_COLS.slice(sel.c1, sel.c2 + 1).filter((c) => c.editable).map((c) => c.key);
+  if (!fields.length) return null;
   await ensureRows(sel.r1, sel.r2);
   const rows = [];
   for (let r = sel.r1; r <= sel.r2; r++) if (sheet.rows[r]) rows.push(sheet.rows[r]);
-  return rows;
+  return { rows, fields };
 }
 
 async function clearSelection() {
-  const rows = await selectedRowsForNames();
-  if (!rows) { setMsg('#names-msg', 'Só a coluna Nome pode ser alterada.', 'error'); return; }
-  applyNames(rows.map((row) => ({ row, name: '' })));
+  const cells = await selectedCells();
+  if (!cells) { setMsg('#names-msg', ONLY_EDITABLE, 'error'); return; }
+  applyCells(cells.rows.flatMap((row) => cells.fields.map((field) => ({ row, field, value: '' }))));
   drawSheet();
 }
 
 async function fillDown() {
-  const rows = await selectedRowsForNames();
-  if (!rows) { setMsg('#names-msg', 'Só a coluna Nome pode ser alterada.', 'error'); return; }
-  if (rows.length < 2) return;
-  const name = shownName(rows[0]);
-  applyNames(rows.slice(1).map((row) => ({ row, name })));
+  const cells = await selectedCells();
+  if (!cells) { setMsg('#names-msg', ONLY_EDITABLE, 'error'); return; }
+  if (cells.rows.length < 2) return;
+  const [first, ...rest] = cells.rows;
+  applyCells(rest.flatMap((row) => cells.fields.map((field) => ({ row, field, value: shown(first, field) }))));
   drawSheet();
 }
 
@@ -324,26 +348,34 @@ async function pasteText(text) {
   const grid = parseClipboard(text);
   if (!grid.length || !sheet.total) return;
   const sel = selection();
-  const column = NAME_COL - sel.c1;
   const width = Math.max(...grid.map((line) => line.length));
-  if (column < 0 || column >= width) { setMsg('#names-msg', 'Só a coluna Nome pode ser alterada. Cole a partir dela.', 'error'); return; }
-  // Um valor só preenche toda a seleção, como no Excel
+  // Um valor só preenche toda a seleção (todas as colunas editáveis dela), como no Excel
   const single = grid.length === 1 && width === 1;
+  const lastCol = single ? sel.c2 : Math.min(sel.c1 + width - 1, SHEET_COLS.length - 1);
+  const targets = [];
+  for (let c = sel.c1; c <= lastCol; c++) if (SHEET_COLS[c].editable) targets.push(c);
+  if (!targets.length) { setMsg('#names-msg', `${ONLY_EDITABLE} Cole a partir delas.`, 'error'); return; }
   const count = single ? sel.r2 - sel.r1 + 1 : grid.length;
   const last = Math.min(sel.r1 + count - 1, sheet.total - 1);
   await withBusy(count > SHEET_PAGE, () => ensureRows(sel.r1, last));
   const list = [];
   for (let r = sel.r1; r <= last; r++) {
     const row = sheet.rows[r];
-    if (row) list.push({ row, name: single ? grid[0][0] : grid[r - sel.r1][column] ?? '' });
+    if (!row) continue;
+    for (const c of targets) list.push({ row, field: SHEET_COLS[c].key, value: single ? grid[0][0] : grid[r - sel.r1][c - sel.c1] ?? '' });
   }
-  const changed = applyNames(list);
+  const changed = applyCells(list);
   sheet.all = false;
-  sheet.cur = { r: sel.r1, c: NAME_COL };
-  sheet.ext = { r: last, c: NAME_COL };
+  sheet.cur = { r: sel.r1, c: sel.c1 };
+  sheet.ext = { r: last, c: lastCol };
   drawSheet();
   const dropped = count - (last - sel.r1 + 1);
-  setMsg('#names-msg', `${fmtN(changed)} nome(s) alterado(s).${dropped > 0 ? ` ${fmtN(dropped)} linha(s) ficaram de fora, além do fim da lista.` : ''}`, dropped > 0 ? 'error' : 'ok');
+  const skipped = lastCol - sel.c1 + 1 - targets.length;
+  setMsg('#names-msg', [
+    `${fmtN(changed)} célula(s) alterada(s).`,
+    dropped > 0 ? `${fmtN(dropped)} linha(s) ficaram de fora, além do fim da lista.` : '',
+    skipped > 0 ? 'As colunas que não são editáveis foram ignoradas.' : '',
+  ].filter(Boolean).join(' '), dropped > 0 ? 'error' : 'ok');
 }
 
 async function withBusy(show, fn) {
@@ -357,13 +389,18 @@ async function withBusy(show, fn) {
 function startEdit(initial, caretX) {
   const row = sheet.rows[sheet.cur.r];
   if (!row) return;
-  if (!SHEET_COLS[sheet.cur.c].editable) { setMsg('#names-msg', 'Só a coluna Nome pode ser alterada.', 'error'); return; }
+  const col = SHEET_COLS[sheet.cur.c];
+  if (!col.editable) { setMsg('#names-msg', ONLY_EDITABLE, 'error'); return; }
   revealCell(sheet.cur.r, sheet.cur.c);
-  sheet.editing = { row };
+  sheet.editing = { row, field: col.key };
   editor.style.top = `${sheet.cur.r * SHEET_ROW}px`;
-  editor.style.left = `${colLeft(NAME_COL)}px`;
-  editor.style.width = `${SHEET_COLS[NAME_COL].width}px`;
-  editor.value = initial ?? shownName(row);
+  editor.style.left = `${colLeft(sheet.cur.c)}px`;
+  editor.style.width = `${col.width}px`;
+  editor.maxLength = col.max;
+  // Marca, fabricante e categoria sugerem os valores já cadastrados
+  if (col.list) editor.setAttribute('list', col.list); else editor.removeAttribute('list');
+  editor.setAttribute('aria-label', `Editar ${col.label.toLowerCase()}`);
+  editor.value = initial ?? shown(row, col.key);
   editor.classList.remove('hidden');
   formula.value = editor.value;
   editor.focus({ preventScroll: true });
@@ -388,7 +425,7 @@ function endEdit(save) {
   if (!editing) return;
   sheet.editing = null;
   editor.classList.add('hidden');
-  if (save) applyNames([{ row: editing.row, name: editor.value }]);
+  if (save) applyCells([{ row: editing.row, field: editing.field, value: editor.value }]);
   drawSheet();
 }
 
@@ -421,7 +458,7 @@ formula.addEventListener('keydown', (e) => {
   if (!['Enter', 'Escape'].includes(e.key)) return;
   e.preventDefault();
   const row = sheet.rows[sheet.cur.r];
-  if (e.key === 'Enter' && row && !formula.readOnly) applyNames([{ row, name: formula.value }]);
+  if (e.key === 'Enter' && row && !formula.readOnly) applyCells([{ row, field: SHEET_COLS[sheet.cur.c].key, value: formula.value }]);
   sheet.barEditing = false;
   scroller.focus({ preventScroll: true });
   if (e.key === 'Enter') moveTo(sheet.cur.r + 1, sheet.cur.c);
@@ -431,7 +468,7 @@ formula.addEventListener('blur', () => {
   if (!sheet.barEditing) return;
   const row = sheet.rows[sheet.cur.r];
   sheet.barEditing = false;
-  if (row && !formula.readOnly) applyNames([{ row, name: formula.value }]);
+  if (row && !formula.readOnly) applyCells([{ row, field: SHEET_COLS[sheet.cur.c].key, value: formula.value }]);
   drawSheet();
 });
 
@@ -505,7 +542,7 @@ $('#sheet-rows').addEventListener('mousedown', (e) => {
     sheet.ext = target;
     if (!e.shiftKey) sheet.cur = { ...target };
     sheet.dragging = true;
-    // Clique simples no Nome edita ali mesmo; se o mouse arrastar, vira seleção
+    // Clique simples numa coluna editável edita ali mesmo; se o mouse arrastar, vira seleção
     const box = cell.getBoundingClientRect();
     sheet.clickEdit = !e.shiftKey && SHEET_COLS[target.c].editable ? { ...target, x: e.clientX - box.left - 6 } : null;
   }
@@ -569,10 +606,10 @@ scroller.addEventListener('scroll', queueDraw);
 async function saveNames() {
   if (sheet.saving || !sheet.dirty.size) return;
   endEdit(true);
-  const entries = [...sheet.dirty.entries()];
-  const invalid = entries.filter(([, d]) => invalidName(d.name));
+  const entries = [...sheet.dirty.values()];
+  const invalid = entries.filter((d) => invalidValue(d.field, d.value));
   if (invalid.length) {
-    setMsg('#names-msg', `${fmtN(invalid.length)} nome(s) vazio(s) ou com mais de ${SHEET_MAX_NAME} caracteres: corrija antes de salvar.`, 'error');
+    setMsg('#names-msg', `${fmtN(invalid.length)} célula(s) inválida(s): nome vazio ou texto longo demais (nome até 300 caracteres; marca, fabricante e categoria até 120). Corrija antes de salvar.`, 'error');
     drawSheet();
     return;
   }
@@ -583,27 +620,31 @@ async function saveNames() {
   let missing = 0;
   try {
     for (let i = 0; i < entries.length; i += SHEET_SAVE_BATCH) {
-      const items = entries.slice(i, i + SHEET_SAVE_BATCH).map(([id, d]) => ({ id, name: d.name, original: d.original }));
+      const items = entries.slice(i, i + SHEET_SAVE_BATCH).map((d) => ({ id: d.id, field: d.field, value: d.value, original: d.original }));
       const r = await api('POST', '/api/admin/product-names', { items });
       for (const s of r.saved) {
         const row = sheet.byId.get(s.id);
-        if (row) row.name = s.name;
-        sheet.dirty.delete(s.id);
+        if (row) row[s.field] = s.value;
+        sheet.dirty.delete(dirtyKey(s.id, s.field));
         saved++;
       }
       // Outra pessoa alterou: a versão daqui fica marcada; salvar de novo confirma a troca
       for (const c of r.conflicts) {
-        const d = sheet.dirty.get(c.id);
+        const d = sheet.dirty.get(dirtyKey(c.id, c.field));
         if (d) { d.original = c.current; d.conflict = true; }
         const row = sheet.byId.get(c.id);
-        if (row) row.name = c.current;
+        if (row) row[c.field] = c.current;
         conflicts++;
       }
-      for (const id of r.missing) { sheet.dirty.delete(id); missing++; }
+      for (const id of r.missing) {
+        for (const key of [...sheet.dirty.keys()]) if (key.startsWith(`${id}|`)) sheet.dirty.delete(key);
+        missing++;
+      }
       if (i + SHEET_SAVE_BATCH < entries.length) setMsg('#names-msg', `Salvando… ${fmtN(saved)} de ${fmtN(entries.length)}`);
     }
     if (saved || missing) { sheet.undo = []; sheet.redo = []; }
-    const parts = [`${fmtN(saved)} nome(s) salvo(s).`];
+    const parts = [`${fmtN(saved)} célula(s) salva(s).`];
+    if (saved && entries.some((d) => d.field !== 'name')) loadCategories(); // sugestões de marca, fabricante e categoria
     if (conflicts) parts.push(`${fmtN(conflicts)} foi(ram) alterado(s) por outra pessoa enquanto você editava e não foi(ram) gravado(s): confira as células em laranja e salve de novo para confirmar.`);
     if (missing) parts.push(`${fmtN(missing)} produto(s) não existe(m) mais.`);
     setMsg('#names-msg', parts.join(' '), conflicts || missing ? 'error' : 'ok');
@@ -628,6 +669,24 @@ $('#sheet-discard').addEventListener('click', () => {
 });
 $('#sheet-q').addEventListener('input', () => { clearTimeout(sheet.searchTimer); sheet.searchTimer = setTimeout(reloadSheet, 300); });
 $('#sheet-filter').addEventListener('change', () => reloadSheet());
+for (const f of VALUE_FILTERS) {
+  const input = $(`#sheet-f-${f}`);
+  input.addEventListener('change', () => reloadSheet());
+  input.addEventListener('input', () => { clearTimeout(sheet.searchTimer); sheet.searchTimer = setTimeout(reloadSheet, 400); });
+}
+
+// Link da tela Marcas e categorias: #/nomes?brand=Valor (ou __vazio__) já abre filtrado
+function filtersFromHash() {
+  const query = location.hash.split('?')[1];
+  if (!query) return;
+  const params = new URLSearchParams(query);
+  for (const f of VALUE_FILTERS) {
+    const v = params.get(f);
+    $(`#sheet-f-${f}`).value = v === null ? '' : v === EMPTY_FILTER ? '(vazio)' : v;
+  }
+  $('#sheet-q').value = '';
+  $('#sheet-filter').value = '';
+}
 window.addEventListener('beforeunload', (e) => { if (sheet.dirty.size) e.preventDefault(); });
 window.addEventListener('resize', () => { fitNameColumn(); drawHead(); queueDraw(); });
 
@@ -648,7 +707,9 @@ window.onNamesView = async () => {
   }
   fitNameColumn();
   drawHead();
-  await reloadSheet({ keepPlace: true });
+  const filtered = location.hash.includes('?');
+  filtersFromHash();
+  await reloadSheet({ keepPlace: !filtered });
   revealCell(sheet.cur.r, sheet.cur.c); // em tela estreita, a coluna Nome começa fora da vista
   scroller.focus({ preventScroll: true });
 };

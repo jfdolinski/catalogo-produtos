@@ -311,9 +311,13 @@ new IntersectionObserver((entries) => {
 }, { root: $('.sidebar'), rootMargin: '300px' }).observe($('#list-more'));
 
 async function loadCategories() {
-  // Pela rota do painel: a pública pode exigir a chave da empresa
-  const cats = await api('GET', '/api/admin/field-values/category?limit=1000').catch(() => []);
-  $('#categories').innerHTML = cats.map((c) => `<option value="${esc(c.value)}">`).join('');
+  // Sugestões dos campos de texto (cadastro, edição em massa, filtros da planilha), pela rota do painel:
+  // a pública pode exigir a chave da empresa
+  const lists = { categories: 'category', brands: 'brand', manufacturers: 'manufacturer' };
+  await Promise.all(Object.entries(lists).map(async ([id, field]) => {
+    const values = await api('GET', `/api/admin/field-values/${field}?limit=1000`).catch(() => []);
+    $(`#${id}`).innerHTML = values.map((v) => `<option value="${esc(v.value)}">`).join('');
+  }));
 }
 // Filtros da lista: os três primeiros têm aba; os demais vêm dos cards do dashboard e aparecem como etiqueta
 const FILTER_LABELS = {
@@ -907,6 +911,7 @@ const VIEWS = {
   produtos: { perm: ['produtos', 'atualizacao', 'parametros'] },
   atualizar: { perm: 'atualizacao' },
   nomes: { perm: 'produtos', page: '#names', open: () => window.onNamesView?.() },
+  valores: { perm: 'produtos', page: '#values', open: () => window.onValuesView?.() },
   ncm: { perm: 'ncm', page: '#ncm', open: () => window.onNcmView?.() },
   dcb: { perm: 'dcb', page: '#dcb', open: () => window.onDcbView?.() },
   empresas: { perm: 'empresas', page: '#companies', open: () => window.onCompaniesView?.() },
