@@ -4,11 +4,12 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { useCameraPermissions } from 'expo-camera';
-import { apagarSessao, clienteDa, ErroApi, ErroEnvio, lerSessao, type Origem, type Produto, type Sessao } from './api';
+import { apagarSessao, clienteDa, ErroApi, ErroEnvio, gravarAjustesCamera, lerAjustesCamera, lerSessao, type Origem, type Produto, type Sessao } from './api';
 import { baixarEInstalar, versaoInstalada, versaoNova } from './atualizacao';
 import { pedirPermissaoLocalizacao } from './localizacao';
 import { LeitorCodigo } from './LeitorCodigo';
-import { codigoDeBarras, gtinValido } from './regras';
+import { AJUSTES_PADRAO, codigoDeBarras, gtinValido, type AjustesCamera } from './regras';
+import { TelaAjustes } from './TelaAjustes';
 import { TelaFotos } from './TelaFotos';
 import { TelaNovo } from './TelaNovo';
 import { TelaProduto } from './TelaProduto';
@@ -63,7 +64,8 @@ type Tela =
   | { qual: 'fotos'; produto: Produto }
   | { qual: 'enviando'; produto: Produto; total: number; feitas: number }
   | { qual: 'produto'; produto: Produto; aviso?: string | null }
-  | { qual: 'carregando'; texto: string };
+  | { qual: 'carregando'; texto: string }
+  | { qual: 'ajustes' };
 
 // Fila de atualização (como no painel): ids na ordem do servidor e o item aberto
 type Fila = { origem: Origem; ids: number[]; indice: number };
@@ -88,6 +90,13 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   const oferecidas = useRef(new Set<string>());
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [aba, setAba] = useState<'ler' | 'fila'>('ler');
+  // Ajustes da câmera deste celular (tela Ajustes)
+  const [ajustes, setAjustes] = useState<AjustesCamera>(AJUSTES_PADRAO);
+  useEffect(() => { void lerAjustesCamera().then(setAjustes); }, []);
+  const mudarAjustes = (a: AjustesCamera) => {
+    setAjustes(a);
+    void gravarAjustesCamera(a);
+  };
   const [origem, setOrigem] = useState<Origem>('pending');
   const [fila, setFila] = useState<Fila | null>(null);
   const campo = useRef<ComponentRef<typeof TextInput>>(null);
@@ -223,7 +232,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
     const total = jaEnviadas + uris.length;
     setTela({ qual: 'enviando', produto, total, feitas: jaEnviadas });
     try {
-      const atualizado = await api.enviarFotos(produto.id, uris, (n) => setTela({ qual: 'enviando', produto, total, feitas: jaEnviadas + n }));
+      const atualizado = await api.enviarFotos(produto.id, uris, (n) => setTela({ qual: 'enviando', produto, total, feitas: jaEnviadas + n }), ajustes);
       setTela({ qual: 'produto', produto: { ...atualizado, pending: produto.pending }, aviso: `${total} foto${total > 1 ? 's enviadas' : ' enviada'}.` });
     } catch (e) {
       // As fotos ficam no aparelho só nesta tela: avisa e deixa tentar de novo só as que faltam
@@ -256,7 +265,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
   }
   if (tela.qual === 'fotos') {
     const produto = tela.produto;
-    return <TelaFotos produto={produto} aoConcluir={(uris) => void enviar(produto, uris)} aoCancelar={() => setTela({ qual: 'produto', produto })} />;
+    return <TelaFotos produto={produto} ajustes={ajustes} aoConcluir={(uris) => void enviar(produto, uris)} aoCancelar={() => setTela({ qual: 'produto', produto })} />;
   }
 
   const voltarParaLeitura = (texto: string | null = null) => {
@@ -279,10 +288,15 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
           <Text style={estilos.marca}>Catálogo</Text>
           <Text style={estilos.usuario} numberOfLines={1}>{sessao.usuario.name} · {new URL(sessao.servidor).host}</Text>
         </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Ajustes da câmera" onPress={() => tela.qual !== 'enviando' && setTela({ qual: 'ajustes' })} hitSlop={10} style={{ marginRight: 18 }}>
+          <Text style={estilos.sair}>Ajustes</Text>
+        </Pressable>
         <Pressable accessibilityRole="button" onPress={sair} hitSlop={10}><Text style={estilos.sair}>Sair</Text></Pressable>
       </View>
 
-      {tela.qual === 'novo' ? (
+      {tela.qual === 'ajustes' ? (
+        <TelaAjustes ajustes={ajustes} aoMudar={mudarAjustes} aoVoltar={() => voltarParaLeitura()} />
+      ) : tela.qual === 'novo' ? (
         <TelaNovo api={api} codigo={tela.codigo} aoVoltar={() => voltarParaLeitura()} aoCadastrar={(p) => void fotografar(p, 'Produto cadastrado.')} />
       ) : tela.qual === 'produto' ? (
         <TelaProduto

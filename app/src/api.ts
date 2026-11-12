@@ -3,10 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 import { File, UploadType } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { cabecalhosDePosicao } from './localizacao';
-import type { Sugestao } from './regras';
+import { AJUSTES_PADRAO, normalizarAjustes, planoDaFoto, type AjustesCamera, type Sugestao } from './regras';
 
-/** Lado maior das fotos enviadas: nítido para o catálogo e leve na rede móvel (de ~4 MB para ~300 KB). */
-const LADO_MAXIMO = 1600;
 
 export interface Usuario {
   id: number;
@@ -69,6 +67,18 @@ export async function lerSessao(): Promise<Sessao | null> {
 export const gravarSessao = (s: Sessao) => cofre.setItemAsync(CHAVE, JSON.stringify(s));
 export const apagarSessao = () => cofre.deleteItemAsync(CHAVE);
 
+// Ajustes da câmera: ficam neste celular (cada aparelho com os seus)
+const CHAVE_CAMERA = 'catalogo.camera';
+export async function lerAjustesCamera(): Promise<AjustesCamera> {
+  try {
+    const texto = await cofre.getItemAsync(CHAVE_CAMERA);
+    return texto ? normalizarAjustes(JSON.parse(texto)) : AJUSTES_PADRAO;
+  } catch {
+    return AJUSTES_PADRAO;
+  }
+}
+export const gravarAjustesCamera = (a: AjustesCamera) => cofre.setItemAsync(CHAVE_CAMERA, JSON.stringify(a));
+
 export class ErroApi extends Error {
   constructor(
     readonly status: number,
@@ -92,18 +102,21 @@ export class ErroEnvio extends ErroApi {
   }
 }
 
-/** Reduz a foto da câmera para JPEG de no máximo LADO_MAXIMO px no lado maior. */
-async function reduzir(uri: string): Promise<string> {
-  const contexto = ImageManipulator.manipulate(uri);
-  const original = await contexto.renderAsync();
-  const maior = Math.max(original.width, original.height);
-  const imagem =
-    maior > LADO_MAXIMO
-      ? await ImageManipulator.manipulate(uri)
-          .resize(original.width >= original.height ? { width: LADO_MAXIMO } : { height: LADO_MAXIMO })
-          .renderAsync()
-      : original;
-  const salva = await imagem.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+/**
+ * Prepara a foto da câmera para o envio, conforme os ajustes do celular: recorta em quadrado (formato 1:1)
+ * e reduz para o lado maior escolhido (1600 px por padrão: nítido e leve na rede móvel, ~300 KB).
+ */
+async function reduzir(uri: string, ajustes: Pick<AjustesCamera, 'formato' | 'ladoMaximo'>): Promise<string> {
+  const original = await ImageManipulator.manipulate(uri).renderAsync();
+  const { recorte, novo } = planoDaFoto(original.width, original.height, ajustes);
+  let imagem = original;
+  if (recorte || novo) {
+    const contexto = ImageManipulator.manipulate(uri);
+    if (recorte) contexto.crop(recorte);
+    if (novo) contexto.resize(novo);
+    imagem = await contexto.renderAsync();
+  }
+  const salva = await imagem.saveAsync({ compress: ajustes.ladoMaximo ? 0.8 : 0.9, format: SaveFormat.JPEG });
   return salva.uri;
 }
 
@@ -187,13 +200,13 @@ export function clienteDa(sessao: Sessao, aoExpirar: () => void) {
      * de arquivos, uma por vez. O fetch do React Native com FormData falhava no Android ("sem conexão").
      * Se uma falhar, ErroEnvio diz quantas já foram, para tentar de novo só as que faltam.
      */
-    enviarFotos: async (id: number, uris: string[], aoProgresso?: (enviadas: number) => void): Promise<Produto> => {
+    enviarFotos: async (id: number, uris: string[], aoProgresso?: (enviadas: number) => void, ajustes: Pick<AjustesCamera, 'formato' | 'ladoMaximo'> = AJUSTES_PADRAO): Promise<Produto> => {
       let produto: Produto | null = null;
       for (const [i, uri] of uris.entries()) {
         aoProgresso?.(i);
         let arquivo: string;
         try {
-          arquivo = await reduzir(uri);
+          arquivo = await reduzir(uri, ajustes);
         } catch {
           throw new ErroEnvio(-1, `Não foi possível preparar a foto ${i + 1}. Tire de novo.`, i);
         }

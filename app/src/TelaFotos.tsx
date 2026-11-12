@@ -2,21 +2,24 @@ import { useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 import type { Produto } from './api';
+import type { AjustesCamera } from './regras';
 import { Botao, cores } from './ui';
 
-const MAXIMO = 10;
-
 /**
- * Câmera para as fotos do produto: tira quantas quiser (até 10), mostra as miniaturas
+ * Câmera para as fotos do produto: tira quantas quiser (até o máximo dos ajustes), mostra as miniaturas
  * (toque numa miniatura para descartar) e devolve os arquivos ao concluir.
+ * Câmera, zoom, flash, lanterna, formato, qualidade e som vêm dos Ajustes deste celular.
  */
-export function TelaFotos({ produto, aoConcluir, aoCancelar }: { produto: Produto; aoConcluir: (uris: string[]) => void; aoCancelar: () => void }) {
+export function TelaFotos({ produto, ajustes, aoConcluir, aoCancelar }: { produto: Produto; ajustes: AjustesCamera; aoConcluir: (uris: string[]) => void; aoCancelar: () => void }) {
+  const MAXIMO = ajustes.maxFotos;
   const codigos = produto.barcodes.map((b) => b.code).join(' · ');
   const camera = useRef<CameraView>(null);
   const [fotos, setFotos] = useState<string[]>([]);
   const [pronta, setPronta] = useState(false);
   const [tirando, setTirando] = useState(false);
-  const [lanterna, setLanterna] = useState(false);
+  const [lanterna, setLanterna] = useState(ajustes.lanterna);
+  const [zoom, setZoom] = useState(ajustes.zoom);
+  const mudarZoom = (passo: number) => setZoom((z) => Math.round(Math.min(1, Math.max(0, z + passo)) * 10) / 10);
   const [erro, setErro] = useState<string | null>(null);
 
   async function tirar() {
@@ -25,7 +28,7 @@ export function TelaFotos({ produto, aoConcluir, aoCancelar }: { produto: Produt
     setErro(null);
     try {
       // Qualidade 0,7: foto nítida para o catálogo e envio leve pela rede móvel
-      const foto = await camera.current.takePictureAsync({ quality: 0.7, skipProcessing: false, shutterSound: false });
+      const foto = await camera.current.takePictureAsync({ quality: ajustes.qualidade, skipProcessing: false, shutterSound: ajustes.som });
       if (foto?.uri) setFotos((f) => [...f, foto.uri]);
     } catch {
       setErro('Não foi possível tirar a foto. Tente de novo.');
@@ -42,7 +45,29 @@ export function TelaFotos({ produto, aoConcluir, aoCancelar }: { produto: Produt
         <Text style={estilos.detalhe} numberOfLines={1}>Código: {codigos || 'sem código'}</Text>
         <Text style={estilos.detalhe} numberOfLines={1}>Fabricante: {produto.manufacturer || 'não informado'}{produto.brand ? `  ·  Marca: ${produto.brand}` : ''}</Text>
       </View>
-      <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={lanterna} onCameraReady={() => setPronta(true)} />
+      <View style={{ flex: 1 }}>
+        <CameraView
+          ref={camera}
+          style={{ flex: 1 }}
+          facing={ajustes.camera}
+          zoom={zoom}
+          flash={ajustes.flash}
+          enableTorch={lanterna}
+          ratio={ajustes.formato}
+          onCameraReady={() => setPronta(true)}
+        />
+        {/* Zoom de cada foto, a partir do zoom inicial dos ajustes */}
+        <View style={estilos.zoom}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir o zoom" onPress={() => mudarZoom(-0.1)} disabled={zoom <= 0} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>−</Text>
+          </Pressable>
+          <Text style={estilos.zoomValor}>{zoom ? `zoom ${Math.round(zoom * 100)}%` : 'sem zoom'}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar o zoom" onPress={() => mudarZoom(0.1)} disabled={zoom >= 1} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>+</Text>
+          </Pressable>
+        </View>
+        {ajustes.formato === '1:1' ? <Text style={estilos.aviso}>Formato quadrado: o centro da foto é o que vai para o catálogo.</Text> : null}
+      </View>
       {fotos.length ? (
         <ScrollView horizontal style={estilos.miniaturas} contentContainerStyle={{ gap: 8, padding: 8 }}>
           {fotos.map((uri, i) => (
@@ -56,7 +81,9 @@ export function TelaFotos({ produto, aoConcluir, aoCancelar }: { produto: Produt
       <View style={estilos.rodape}>
         {erro ? <Text style={{ color: cores.erro, marginBottom: 8 }}>{erro}</Text> : null}
         <Text style={estilos.ajuda}>
-          {fotos.length ? `${fotos.length} foto${fotos.length > 1 ? 's' : ''}. Toque numa miniatura para descartar.` : 'Fotografe a frente da embalagem primeiro: ela vira a foto principal.'}
+          {fotos.length >= MAXIMO
+            ? `Limite de ${MAXIMO} fotos de cada vez (Ajustes). Envie estas para tirar mais.`
+            : fotos.length ? `${fotos.length} foto${fotos.length > 1 ? 's' : ''}. Toque numa miniatura para descartar.` : 'Fotografe a frente da embalagem primeiro: ela vira a foto principal.'}
         </Text>
         <View style={estilos.linha}>
           <View style={{ flex: 1 }}><Botao titulo={lanterna ? 'Apagar luz' : 'Luz'} variante="secundario" onPress={() => setLanterna(!lanterna)} /></View>
@@ -91,4 +118,9 @@ const estilos = StyleSheet.create({
   linha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   disparo: { width: 72, height: 72, borderRadius: 36, borderWidth: 4, borderColor: cores.marca, alignItems: 'center', justifyContent: 'center' },
   disparoMiolo: { width: 54, height: 54, borderRadius: 27, backgroundColor: cores.marca },
+  zoom: { position: 'absolute', bottom: 12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 24, paddingHorizontal: 6, paddingVertical: 4 },
+  zoomBotao: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  zoomTexto: { color: '#fff', fontSize: 24, fontWeight: '700' },
+  zoomValor: { color: '#fff', fontSize: 14, minWidth: 80, textAlign: 'center' },
+  aviso: { position: 'absolute', top: 8, left: 8, right: 8, color: '#fff', fontSize: 12, textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, padding: 4 },
 });

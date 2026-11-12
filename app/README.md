@@ -8,6 +8,10 @@ Atualiza cadastros pelo celular Android, usando a câmera:
 
 React Native com Expo, a mesma base do app Flow. Usa as rotas do painel (`/api/admin/...`) com o token do aparelho, então vale o que o usuário pode fazer no painel (módulo **Atualização** ou **Produtos**).
 
+## Ajustes da câmera (por celular)
+
+Botão **Ajustes**, no alto do app. Valem para as fotos dos produtos e ficam guardados no próprio celular (`catalogo.camera`): câmera traseira ou frontal, zoom inicial (com − e + na tela da câmera para cada foto), flash, lanterna acesa ao abrir, som do disparo, formato (4:3, 16:9 ou quadrado: o quadrado recorta o centro da foto enviada), qualidade da captura, tamanho máximo enviado (1200, 1600, 2048 px ou original) e fotos por vez. Valores inválidos voltam ao padrão (`normalizarAjustes` em `src/regras.ts`).
+
 ## Auditoria (localização)
 
 Cada alteração enviada pelo app leva a posição do celular (cabeçalhos `X-Geo-Lat`, `X-Geo-Lon`, `X-Geo-Precisao`, `X-Geo-Momento`), e o servidor grava em `app_audit` com o usuário e o aparelho. A permissão é pedida ao abrir o app, só com o app em uso (sem localização em segundo plano). Sem permissão ou sem GPS em 4 segundos, a alteração vai sem posição: nunca deixa de gravar por causa disso (`src/localizacao.ts`).

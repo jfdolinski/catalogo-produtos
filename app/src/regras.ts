@@ -97,3 +97,67 @@ export function versaoMaisNova(candidata: string, atual: string): boolean {
   }
   return false;
 }
+
+// ---- Ajustes da câmera (por celular) ----------------------------------------------
+
+export interface AjustesCamera {
+  camera: 'back' | 'front';
+  zoom: number; // 0 (sem zoom) a 1 (máximo do celular)
+  flash: 'off' | 'on' | 'auto';
+  lanterna: boolean; // lanterna acesa ao abrir
+  formato: '4:3' | '16:9' | '1:1'; // 1:1 também recorta a foto enviada em quadrado
+  qualidade: number; // JPEG da captura, 0 a 1
+  ladoMaximo: number; // lado maior da foto enviada, em px; 0 = tamanho original
+  maxFotos: number;
+  som: boolean; // som do disparo
+}
+
+export const AJUSTES_PADRAO: AjustesCamera = {
+  camera: 'back', zoom: 0, flash: 'off', lanterna: false, formato: '4:3', qualidade: 0.7, ladoMaximo: 1600, maxFotos: 10, som: false,
+};
+
+export const OPCOES_CAMERA = {
+  camera: [['back', 'Traseira'], ['front', 'Frontal']],
+  zoom: [[0, 'Sem zoom'], [0.1, '10%'], [0.2, '20%'], [0.3, '30%'], [0.5, '50%']],
+  flash: [['off', 'Desligado'], ['auto', 'Automático'], ['on', 'Ligado']],
+  formato: [['4:3', '4:3'], ['16:9', '16:9'], ['1:1', 'Quadrado']],
+  qualidade: [[0.5, 'Econômica'], [0.7, 'Normal'], [0.9, 'Alta']],
+  ladoMaximo: [[1200, '1200 px'], [1600, '1600 px'], [2048, '2048 px'], [0, 'Original']],
+  maxFotos: [[5, '5'], [10, '10'], [20, '20']],
+} as const;
+
+/** Ajustes lidos do aparelho: valores fora das opções voltam ao padrão (versão antiga, arquivo corrompido). */
+export function normalizarAjustes(bruto: unknown): AjustesCamera {
+  const b = (bruto && typeof bruto === 'object' ? bruto : {}) as Record<string, unknown>;
+  const opcao = <K extends keyof typeof OPCOES_CAMERA>(k: K) =>
+    (OPCOES_CAMERA[k] as readonly (readonly [unknown, string])[]).some(([v]) => v === b[k]) ? (b[k] as AjustesCamera[K]) : AJUSTES_PADRAO[k];
+  return {
+    camera: opcao('camera'),
+    zoom: opcao('zoom'),
+    flash: opcao('flash'),
+    lanterna: typeof b.lanterna === 'boolean' ? b.lanterna : AJUSTES_PADRAO.lanterna,
+    formato: opcao('formato'),
+    qualidade: opcao('qualidade'),
+    ladoMaximo: opcao('ladoMaximo'),
+    maxFotos: opcao('maxFotos'),
+    som: typeof b.som === 'boolean' ? b.som : AJUSTES_PADRAO.som,
+  };
+}
+
+/**
+ * Recorte e redução da foto enviada: retângulo central quadrado (formato 1:1) e novo tamanho (lado maior).
+ * Devolve null no que não precisa mudar.
+ */
+export function planoDaFoto(largura: number, altura: number, a: Pick<AjustesCamera, 'formato' | 'ladoMaximo'>) {
+  let w = largura;
+  let h = altura;
+  let recorte: { originX: number; originY: number; width: number; height: number } | null = null;
+  if (a.formato === '1:1' && w !== h) {
+    const lado = Math.min(w, h);
+    recorte = { originX: Math.floor((w - lado) / 2), originY: Math.floor((h - lado) / 2), width: lado, height: lado };
+    w = h = lado;
+  }
+  const maior = Math.max(w, h);
+  const novo = a.ladoMaximo && maior > a.ladoMaximo ? (w >= h ? { width: a.ladoMaximo } : { height: a.ladoMaximo }) : null;
+  return { recorte, novo };
+}

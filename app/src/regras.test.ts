@@ -58,3 +58,16 @@ test('versão publicada com número da compilação', () => {
   assert.equal(comp('1.0.1-5', '1.0.1-5'), false);
   assert.equal(comp('1.0.0-2', '1.0.1-3'), false);
 });
+
+test('ajustes da câmera', async () => {
+  const { normalizarAjustes, AJUSTES_PADRAO, planoDaFoto } = await import('./regras.ts');
+  assert.deepEqual(normalizarAjustes(null), AJUSTES_PADRAO);
+  assert.deepEqual(normalizarAjustes({ zoom: 0.3, flash: 'auto', lanterna: true, formato: '1:1', som: true }), { ...AJUSTES_PADRAO, zoom: 0.3, flash: 'auto', lanterna: true, formato: '1:1', som: true });
+  const ruim = normalizarAjustes({ zoom: 7, flash: 'laser', qualidade: '0.9', ladoMaximo: 999, maxFotos: -1, lanterna: 'sim' });
+  assert.deepEqual(ruim, AJUSTES_PADRAO, 'valores fora das opções voltam ao padrão');
+  assert.deepEqual(planoDaFoto(4000, 3000, { formato: '4:3', ladoMaximo: 1600 }), { recorte: null, novo: { width: 1600 } });
+  assert.deepEqual(planoDaFoto(3000, 4000, { formato: '4:3', ladoMaximo: 1600 }), { recorte: null, novo: { height: 1600 } });
+  assert.deepEqual(planoDaFoto(4000, 3000, { formato: '1:1', ladoMaximo: 1600 }), { recorte: { originX: 500, originY: 0, width: 3000, height: 3000 }, novo: { width: 1600 } });
+  assert.deepEqual(planoDaFoto(1200, 900, { formato: '4:3', ladoMaximo: 1600 }), { recorte: null, novo: null }, 'foto menor não aumenta');
+  assert.deepEqual(planoDaFoto(4000, 3000, { formato: '4:3', ladoMaximo: 0 }), { recorte: null, novo: null }, 'original');
+});
