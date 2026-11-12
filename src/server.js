@@ -13,11 +13,12 @@ import { mountTax, productTax, checkUf, cleanNcmCode, checkTaxClass, fiscalValue
 import { mountTaxImport } from './tax-import.js';
 import { mountNfceImport } from './nfce-import.js';
 import { mountCatalog } from './catalog-cache.js';
-import { cleanBody, cleanField, cleanLine } from './text.js';
+import { cleanBody, cleanField, cleanLine, cleanProductField } from './text.js';
 import { textCleanupSummary } from './text-cleanup.js';
 import { mountAppDevices, DOWNLOADS_DIR } from './app-devices.js';
 import { auditAppWrites, mountAppAudit } from './app-audit.js';
 import { mountSignup } from './signup.js';
+import { runCaseCleanup } from './case-cleanup.js';
 import { analyzeBarcode } from './barcode.js';
 import { readSpreadsheet, FIELD_LABELS } from './importer.js';
 import { providers, lookupOne } from './lookup.js';
@@ -287,7 +288,7 @@ function checkExtraFields(out) {
 async function cleanProduct(body, partial) {
   const out = {};
   for (const f of PRODUCT_FIELDS) {
-    if (body[f] !== undefined) out[f] = body[f] === null ? '' : String(body[f]).trim();
+    if (body[f] !== undefined) out[f] = body[f] === null ? '' : cleanProductField(f, String(body[f]));
   }
   if ('sku' in out && out.sku === '') out.sku = null;
   if (body.active !== undefined) out.active = body.active ? 1 : 0;
@@ -392,7 +393,7 @@ async function autoRegister(rawCode, source, knownName = '') {
   const r = analyzeBarcode(rawCode);
   if (r.error || r.type === 'OUTRO') return null;
   return await tx(async () => {
-    const name = cleanLine(knownName) || `${AUTO_NAME} ${r.code}`;
+    const name = cleanProductField('name', knownName) || `${AUTO_NAME} ${r.code}`;
     const pid = Number((await db.prepare('INSERT INTO products (name) VALUES (?)').run(name)).lastInsertRowid);
     await trackFields(pid, null, { name, active: 1 });
     await insertBarcode(pid, { ...r, note: 'cadastro automático' });
@@ -734,7 +735,7 @@ admin.post('/field-values/:field/rename', async (req, res) => {
   const col = { brand: 'brand', manufacturer: 'manufacturer', category: 'category' }[req.params.field];
   if (!col) throw new HttpError(400, 'Só marca, fabricante e categoria podem ser renomeados');
   const from = cleanLine(String(req.body.from ?? ''));
-  const to = cleanLine(String(req.body.to ?? ''));
+  const to = cleanProductField(col, String(req.body.to ?? ''));
   if (!from) throw new HttpError(400, 'Informe o valor atual');
   if (to.length > 120) throw new HttpError(400, 'Valor novo com mais de 120 caracteres');
   if (from === to) throw new HttpError(400, 'O valor novo é igual ao atual');
@@ -813,7 +814,7 @@ admin.post('/product-names', async (req, res) => {
     const field = it?.field ?? 'name';
     const spec = SHEET_FIELDS[field];
     if (!spec) throw new HttpError(400, `Coluna não editável: ${field}`);
-    const value = cleanLine(String(it?.value ?? it?.name ?? ''));
+    const value = cleanProductField(field, String(it?.value ?? it?.name ?? ''));
     const id = Number(it?.id);
     if (!Number.isInteger(id)) throw new HttpError(400, 'Produto inválido');
     if (spec.required && !value) throw new HttpError(400, `Produto #${id}: o ${spec.label} é obrigatório`);
@@ -1221,7 +1222,7 @@ async function realImagesFirst(productId) {
 // renew: renovar mesmo sem mudanças (salvar = revisão).
 async function applyFields(id, rawData, { group = 'data', renew = true } = {}) {
   const before = await db.prepare('SELECT * FROM products WHERE id = ?').get(id);
-  const data = Object.fromEntries(Object.entries(rawData).map(([k, v]) => [k, typeof v === 'string' ? cleanField(k, v) : v]));
+  const data = Object.fromEntries(Object.entries(rawData).map(([k, v]) => [k, typeof v === 'string' ? cleanProductField(k, v) : v]));
   const changed = Object.fromEntries(Object.entries(data).filter(([k, v]) => String(before[k] ?? '') !== String(v ?? '')));
   const cols = Object.keys(changed);
   if (cols.length) await db.prepare(`UPDATE products SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...Object.values(changed), id);
@@ -1794,6 +1795,8 @@ const httpServer = app.listen(PORT, HOST, () => {
   console.log(`Painel: ${where}/`);
   // Em produção o token não vai para o log; fica em DATA_DIR/config.json
   if (process.env.NODE_ENV !== 'production') console.log(`Token de administração: ${ADMIN_TOKEN}`);
+  // Uma vez: produtos antigos em maiúsculas por palavra, em segundo plano (case-cleanup.js)
+  runCaseCleanup().catch((err) => console.error('maiúsculas por palavra:', err.message));
 });
 
 // No container o Node é o processo principal: sem isto, parar o serviço espera o tempo limite e mata no meio de uma gravação

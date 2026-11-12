@@ -10,9 +10,9 @@ const api = async (m, u, b) => { const r = await st.api(m, u, b); return { s: r.
 try {
   const p = (await api('POST', '/api/admin/products', { name: 'Nome antigo', barcodes: ['7891000315507'] })).b;
   await wait(1100); // as datas têm resolução de segundos
-  const r = await api('POST', '/api/admin/product-names', { items: [{ id: p.id, name: '  Nome novo  ', original: 'Nome antigo' }] });
+  const r = await api('POST', '/api/admin/product-names', { items: [{ id: p.id, name: '  Nome novo  ', original: 'Nome Antigo' }] });
   const after = (await api('GET', `/api/admin/products/${p.id}`)).b;
-  ok('nome gravado sem espaços', r.s === 200 && after.name === 'Nome novo', after.name);
+  ok('nome gravado sem espaços', r.s === 200 && after.name === 'Nome Novo', after.name);
   ok('prazo de dados não renova', !!p.review.data.updated_at && p.review.data.updated_at === after.review.data.updated_at, [p.review.data.updated_at, after.review.data.updated_at]);
   await api('PUT', `/api/admin/products/${p.id}`, { name: 'Nome novo' });
   const revised = (await api('GET', `/api/admin/products/${p.id}`)).b;

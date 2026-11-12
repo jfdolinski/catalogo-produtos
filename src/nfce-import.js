@@ -10,6 +10,7 @@ import path from 'node:path';
 import multer from 'multer';
 import yauzl from 'yauzl';
 import { XMLParser } from 'fast-xml-parser';
+import { cleanProductField } from './text.js';
 import { db, STATE_TAX_FIELDS, mapSeries } from './db.js';
 import { HttpError, tx } from './business.js';
 import { analyzeBarcode } from './barcode.js';
@@ -96,7 +97,7 @@ function readItem(det) {
   const ncm = digits(prod.NCM);
   return {
     barcodes: [prod.cEAN, prod.cEANTrib].map((c) => String(c ?? '').trim()).filter((c, i, all) => /^\d+$/.test(c) && all.indexOf(c) === i),
-    name: clean(prod.xProd, 200),
+    name: cleanProductField('name', clean(prod.xProd, 200)), // como vai ficar gravado (maiúsculas por palavra)
     unit: clean(prod.uCom, 20),
     ncm: ncm.length === 8 && ncm !== '00000000' ? ncm : '',
     cest: digits(prod.CEST).length === 7 ? digits(prod.CEST) : '',

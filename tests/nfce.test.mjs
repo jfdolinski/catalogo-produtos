@@ -122,11 +122,11 @@ try {
   ok('nome de produto bom não muda', fullA.name === 'Produto A');
   ok('CEST e origem preenchidos', fullA.cest === '1300100' && fullA.tax_origin === '0', [fullA.cest, fullA.tax_origin]);
   const fullD = (await api('GET', `/api/admin/products/${q.product_id}`)).body;
-  ok('nome provisório vira o da nota, com entidade decodificada', fullD.name === 'DIPIRONA & CIA 500MG', fullD.name);
+  ok('nome provisório vira o da nota, com entidade decodificada', fullD.name === 'Dipirona & Cia 500mg', fullD.name);
   const fn = await tax(NEW, 'SP');
   ok('produto novo criado com tributos', !!fn.product_id && fn.values.icms_rate === '18', fn.values);
   const newFull = (await api('GET', `/api/admin/products/${fn.product_id}`)).body;
-  ok('produto novo: nome e os dois códigos', newFull.name === 'NOVO PRODUTO' && newFull.barcodes.map((b) => b.code).sort().join() === [NEW, NEW_T].sort().join(), [newFull.name, newFull.barcodes.map((b) => b.code)]);
+  ok('produto novo: nome e os dois códigos', newFull.name === 'Novo Produto' && newFull.barcodes.map((b) => b.code).sort().join() === [NEW, NEW_T].sort().join(), [newFull.name, newFull.barcodes.map((b) => b.code)]);
   const out = await tax(OTHER, 'SP');
   ok('notas ignoradas não mudam nada e regra manual fica', out.values.icms_rate === '25', out.values);
 

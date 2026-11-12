@@ -23,18 +23,29 @@ export async function startStack({ env = {} } = {}) {
   const token = 'token-de-teste';
   const base = `http://localhost:${port}`;
   let logs = '';
-  const srv = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(ROOT, 'src/server.js')], {
-    cwd: ROOT,
-    env: { ...process.env, DATA_DIR: dir, ADMIN_TOKEN: token, PORT: String(port), DATABASE_URL: `postgres://postgres@127.0.0.1:${pgPort}/postgres`, DB_POOL_MAX: '1', ...env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  srv.stdout.on('data', (d) => { logs += d; });
-  srv.stderr.on('data', (d) => { logs += d; });
-  for (let i = 0; i < 200; i++) {
-    try { if ((await fetch(`${base}/api/v1/categories`)).ok) break; } catch { /* subindo */ }
-    if (srv.exitCode !== null) throw new Error(`o servidor parou ao subir:\n${logs}`);
-    await wait(100);
-  }
+  let srv;
+  // Sobe o servidor (e de novo em restart(): o mesmo banco, como numa nova publicação)
+  const boot = async () => {
+    srv = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(ROOT, 'src/server.js')], {
+      cwd: ROOT,
+      env: { ...process.env, DATA_DIR: dir, ADMIN_TOKEN: token, PORT: String(port), DATABASE_URL: `postgres://postgres@127.0.0.1:${pgPort}/postgres`, DB_POOL_MAX: '1', ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    srv.stdout.on('data', (d) => { logs += d; });
+    srv.stderr.on('data', (d) => { logs += d; });
+    for (let i = 0; i < 200; i++) {
+      try { if ((await fetch(`${base}/api/v1/categories`)).ok) break; } catch { /* subindo */ }
+      if (srv.exitCode !== null) throw new Error(`o servidor parou ao subir:\n${logs}`);
+      await wait(100);
+    }
+  };
+  await boot();
+  const restart = async () => {
+    const exited = new Promise((r) => srv.once('exit', r));
+    srv.kill();
+    await exited;
+    await boot();
+  };
   const H = { Authorization: `Bearer ${token}` };
   const api = async (method, url, body) => {
     const r = await fetch(base + url, { method, headers: { ...H, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
@@ -61,7 +72,7 @@ export async function startStack({ env = {} } = {}) {
     await pg.close().catch(() => {});
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
-  return { base, port, dir, token, H, api, upload, sql, stop, logs: () => logs, pg };
+  return { base, port, dir, token, H, api, upload, sql, stop, restart, logs: () => logs, pg };
 }
 
 // Registro dos resultados; no fim, código de saída 1 se algo falhou

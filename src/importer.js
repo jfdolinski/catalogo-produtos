@@ -1,6 +1,6 @@
 // Leitura de planilhas (CSV ou XLSX) para importação de cadastros.
 import ExcelJS from 'exceljs';
-import { cleanField, cleanMultiline } from './text.js';
+import { cleanMultiline, cleanProductField } from './text.js';
 
 // Nomes de coluna aceitos (comparados sem acentos, minúsculos, com "_" no lugar de espaços/símbolos)
 const ALIASES = {
@@ -135,7 +135,7 @@ export async function readSpreadsheet(buf, filename = '') {
       if (field === 'barcodes') row.barcodes = splitList(v);
       else if (field === 'images') row.images = v.split(/[|\s]+/).filter(Boolean); // URLs podem ter vírgula
       else if (field === 'active') row.active = parseActive(v);
-      else row[field] = cleanField(field, v);
+      else row[field] = cleanProductField(field, v); // a prévia já mostra como vai ficar
     }
     rows.push(row);
   }

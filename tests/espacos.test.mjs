@@ -22,9 +22,9 @@ try {
   ok('produto: várias linhas mantidas, cada uma tratada', p.b.description === 'Linha um\n\nLinha dois' && p.b.tax_notes === 'Obs a\nObs b', [p.b.description, p.b.tax_notes]);
   ok('código: observação', p.b.barcodes[0].note === 'nota de codigo', p.b.barcodes[0].note);
   const u = await api('PUT', `/api/admin/products/${p.b.id}`, { name: '   Novo    nome ' });
-  ok('produto: atualização', u.b.name === 'Novo nome', u.b.name);
+  ok('produto: atualização', u.b.name === 'Novo Nome', u.b.name);
   const quebra = await api('PUT', `/api/admin/products/${p.b.id}`, { name: 'Nome\ncom\r\nquebra' });
-  ok('nome não aceita quebra de linha', quebra.b.name === 'Nome com quebra', quebra.b.name);
+  ok('nome não aceita quebra de linha', quebra.b.name === 'Nome com Quebra', quebra.b.name);
   const so = await api('PUT', `/api/admin/products/${p.b.id}`, { name: `  ${NB} ` });
   ok('só espaços conta como vazio', so.s === 400, so.b.error);
 
@@ -33,16 +33,16 @@ try {
   console.log(`      edição em massa: ${bulk.s} marca=${JSON.stringify(afterBulk.brand)}`);
 
   // Planilha de nomes
-  const sn = await api('POST', '/api/admin/product-names', { items: [{ id: p.b.id, name: '  Da   planilha ', original: 'Nome com quebra' }] });
-  ok('planilha de nomes', sn.b.saved?.[0]?.name === 'Da planilha' && (await api('GET', `/api/admin/products/${p.b.id}`)).b.name === 'Da planilha', sn.b);
+  const sn = await api('POST', '/api/admin/product-names', { items: [{ id: p.b.id, name: '  Da   planilha ', original: 'Nome com Quebra' }] });
+  ok('planilha de nomes', sn.b.saved?.[0]?.name === 'Da Planilha' && (await api('GET', `/api/admin/products/${p.b.id}`)).b.name === 'Da Planilha', sn.b);
   const oldSave = await api('POST', '/api/admin/product-names', { items: [{ id: oldId, name: 'Corrigido   agora', original: '  Antigo   com  espacos ' }] });
-  ok('nome antigo com espaços não vira conflito falso', oldSave.b.saved?.[0]?.name === 'Corrigido agora' && !oldSave.b.conflicts.length, oldSave.b);
+  ok('nome antigo com espaços não vira conflito falso', oldSave.b.saved?.[0]?.name === 'Corrigido Agora' && !oldSave.b.conflicts.length, oldSave.b);
   const real = await api('POST', '/api/admin/product-names', { items: [{ id: oldId2, name: 'Y', original: 'Outra coisa' }] });
   ok('conflito de verdade continua detectado', real.b.conflicts?.length === 1, real.b);
   const untouched = (await api('GET', `/api/admin/products/${oldId2}`)).b;
   ok('registro antigo só muda ao salvar', untouched.name === 'Outro  antigo', untouched.name);
   const reSave = await api('PUT', `/api/admin/products/${oldId2}`, { name: untouched.name });
-  ok('salvar de novo corrige o antigo', reSave.b.name === 'Outro antigo', reSave.b.name);
+  ok('salvar de novo corrige o antigo', reSave.b.name === 'Outro Antigo', reSave.b.name);
 
   // Outros cadastros
   const n = await api('POST', '/api/admin/ncm', { code: '30049069', description: '  Medicamentos   gerais ', notes: ' A  b ' });
@@ -94,7 +94,7 @@ try {
   await api('POST', '/api/admin/xml-import/apply', { id: j.id });
   for (let i = 0; i < 100; i++) { j = (await api('GET', '/api/admin/xml-import')).b; if (j.status === 'done') break; await wait(50); }
   const nf = (await api('GET', `/api/v1/barcodes/${c3}`)).b;
-  ok('NFC-e: nome e unidade', nf.name === 'NOTA FISCAL ITEM' && nf.unit === 'C X', [nf.name, nf.unit]);
+  ok('NFC-e: nome e unidade', nf.name === 'Nota Fiscal Item' && nf.unit === 'C X', [nf.name, nf.unit]);
 
   // Cadastro automático e origem da consulta
   const c4 = gtin('789100000014');

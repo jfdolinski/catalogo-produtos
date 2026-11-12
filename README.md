@@ -240,6 +240,12 @@ Ficaram de fora o login, as faturas e as estatísticas de consulta.
 
 A tela **Marcas e categorias** (`/#/valores`, permissão "Produtos") lista as marcas, os fabricantes/laboratórios e as categorias em uso, com a quantidade de produtos de cada um. **Renomear** corrige a grafia em todos os produtos de uma vez; renomear para um valor que já existe junta os dois; deixar vazio tira o valor dos produtos. **Ver produtos** abre a planilha Nomes filtrada. Rotas: `GET /api/admin/field-values/:campo?q=&limit=&empty=1` e `POST /api/admin/field-values/:campo/rename` (`{ from, to }`). Os mesmos valores alimentam as sugestões dos campos Marca, Fabricante e Categoria no cadastro.
 
+## Maiúsculas por palavra
+
+Nome, marca, fabricante e categoria dos produtos ficam com a primeira letra de cada palavra maiúscula, em toda entrada de dados (painel, planilha Nomes, app, importação de planilha e de NFC-e, busca automática, edição em massa, renomear valores): "DIPIRONA SÓDICA 500MG C/10 CPR" vira "Dipirona Sódica 500mg C/10 CPR". Regras (`caseWords` em `src/text.js`): de, da, do, e, com, para... minúsculos no meio; número com unidade padronizado (500mg, 10ml, 1,5L, 200UI; "2X30UN" vira "2x30UN"); siglas curtas sem vogal (CX, PCT, CPR), siglas conhecidas (USB, UHT, EMS...), códigos com número (B12, 3M, C30) e algarismos romanos ficam maiúsculos. O nome provisório "PRODUTO NÃO CADASTRADO ..." fica como está. Unidade, SKU e descrição não mudam.
+
+Os produtos já cadastrados foram convertidos uma vez, em segundo plano, ao subir a versão (`src/case-cleanup.js`, marca `migr_maiusculas_por_palavra` em settings); cada valor antigo está em `text_cleanup_log` com status `maiusculas`.
+
 ## Nomes dos produtos (planilha)
 
 A tela **Nomes** (`/#/nomes`, permissão "Produtos") mostra o catálogo como uma planilha. São editáveis Nome, Marca, Fabricante e Categoria (as três últimas sugerem os valores já cadastrados), e dá para filtrar por marca, fabricante e categoria (digite `(vazio)` para ver os produtos sem o valor); as alterações ficam

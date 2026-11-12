@@ -19,7 +19,7 @@ try {
   ok('id inválido responde 400/404', [400, 404].includes((await api('GET', '/api/admin/products/abc')).s));
   ok('produto inexistente 404', (await api('GET', '/api/admin/products/999999')).s === 404);
   const upd = await api('PUT', `/api/admin/products/${p1.b.id}`, { name: 'Dipirona 500mg c/10', cbs_rate: '8,8', description: 'Linha 1\nLinha 2' });
-  ok('atualiza produto', upd.s === 200 && upd.b.name === 'Dipirona 500mg c/10' && upd.b.cbs_rate === '8.8' && !!upd.b.field_dates.name, upd.b.error ?? '');
+  ok('atualiza produto', upd.s === 200 && upd.b.name === 'Dipirona 500mg C/10' && upd.b.cbs_rate === '8.8' && !!upd.b.field_dates.name, upd.b.error ?? '');
   const addBc = await api('POST', `/api/admin/products/${p1.b.id}/barcodes`, { code: C });
   ok('inclui código de barras', addBc.s === 201 && addBc.b.barcodes.length === 2);
   const delBc = await api('DELETE', `/api/admin/barcodes/${addBc.b.barcodes.find((b) => b.code === C).id}`);

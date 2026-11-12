@@ -76,7 +76,7 @@ try {
 
   // Alteração: fica fora até vencer; a chamada depois do prazo devolve a cópia e monta outra; a seguinte já traz
   await fetch(`${base}/api/admin/products/${pid}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: 'AAA NOME ALTERADO' }) });
-  const hasNew = async () => ((await (await fetch(`${base}/api/v1/catalog.json`)).json()).items[0].name === 'AAA NOME ALTERADO');
+  const hasNew = async () => ((await (await fetch(`${base}/api/v1/catalog.json`)).json()).items[0].name === 'Aaa Nome Alterado');
   ok('dentro do prazo continua a cópia', !(await hasNew()));
   await wait(TTL * 1000 + 300);
   let appeared = false;
@@ -88,7 +88,7 @@ try {
   await fetch(`${base}/api/admin/products/${pid}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: 'AAB NOME DE NOVO' }) });
   await wait(TTL * 2000 + 300);
   const late = await (await fetch(`${base}/api/v1/catalog.json`)).json();
-  ok('depois do limite não entrega cópia velha', late.items[0].name === 'AAB NOME DE NOVO', late.items[0].name);
+  ok('depois do limite não entrega cópia velha', late.items[0].name === 'Aab Nome de Novo', late.items[0].name);
   const same1 = await raw('/api/v1/catalog.json');
   await wait(TTL * 1000 + 300);
   await raw('/api/v1/catalog.json');
