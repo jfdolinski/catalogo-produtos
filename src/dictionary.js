@@ -10,14 +10,14 @@ const MAX_LISTA = 300; // produtos mostrados na prévia
 const BLOCO = 500;
 
 const ruleOut = (r) => ({
-  id: r.id, field: r.field, find: r.find, replace: r.replacement, active: !!r.active, created_by: r.created_by,
+  id: r.id, field: r.field, find: r.find, replace: r.replacement, whole_word: !!r.whole_word, active: !!r.active, created_by: r.created_by,
   applied_at: iso(r.applied_at), applied_count: r.applied_count, created_at: iso(r.created_at), updated_at: iso(r.updated_at),
 });
 
 /** Carrega as regras ativas para a memória (text.js usa sem consultar o banco). */
 export async function loadDictionary() {
   const rows = await db.all('SELECT * FROM name_rules WHERE active = 1 ORDER BY id');
-  setDictionary(rows.map((r) => ({ id: r.id, field: r.field, find: r.find, replace: r.replacement })));
+  setDictionary(rows.map((r) => ({ id: r.id, field: r.field, find: r.find, replace: r.replacement, wholeWord: !!r.whole_word })));
   return rows.length;
 }
 
@@ -29,7 +29,7 @@ function cleanRule(body) {
   if (!find) throw new HttpError(400, 'Informe o trecho a procurar');
   if (find.length > 120 || replace.length > 200) throw new HttpError(400, 'Texto longo demais (procurar até 120, trocar por até 200 caracteres)');
   if (find === replace) throw new HttpError(400, 'O texto novo é igual ao procurado');
-  return { field, find, replace };
+  return { field, find, replace, wholeWord: body.whole_word === true || body.whole_word === 1 || body.whole_word === '1' };
 }
 
 // Valor como ficaria com as regras informadas (as já cadastradas + a candidata, na prévia)
@@ -52,7 +52,7 @@ async function previewChanges(field, find, rules) {
 }
 
 async function activeRules() {
-  return (await db.all('SELECT * FROM name_rules WHERE active = 1 ORDER BY id')).map((r) => ({ id: r.id, field: r.field, find: r.find, replace: r.replacement }));
+  return (await db.all('SELECT * FROM name_rules WHERE active = 1 ORDER BY id')).map((r) => ({ id: r.id, field: r.field, find: r.find, replace: r.replacement, wholeWord: !!r.whole_word }));
 }
 
 export function mountDictionary(admin, { applyFields }) {
@@ -79,8 +79,8 @@ export function mountDictionary(admin, { applyFields }) {
     const rule = cleanRule(req.body);
     const dup = await db.get('SELECT id FROM name_rules WHERE field = ? AND lower(find) = lower(?)', rule.field, rule.find);
     if (dup) throw new HttpError(409, `Já existe uma regra para "${rule.find}" neste campo (#${dup.id})`);
-    const r = await db.run('INSERT INTO name_rules (field, find, replacement, created_by) VALUES (?, ?, ?, ?)',
-      rule.field, rule.find, rule.replace, req.user?.login || req.user?.name || '');
+    const r = await db.run('INSERT INTO name_rules (field, find, replacement, whole_word, created_by) VALUES (?, ?, ?, ?, ?)',
+      rule.field, rule.find, rule.replace, rule.wholeWord ? 1 : 0, req.user?.login || req.user?.name || '');
     await loadDictionary();
     res.status(201).json(ruleOut(await db.get('SELECT * FROM name_rules WHERE id = ?', r.lastInsertRowid)));
   });
@@ -89,12 +89,12 @@ export function mountDictionary(admin, { applyFields }) {
     const id = Number(req.params.id);
     const cur = await db.get('SELECT * FROM name_rules WHERE id = ?', id);
     if (!cur) throw new HttpError(404, 'Regra não encontrada');
-    const rule = cleanRule({ field: cur.field, find: cur.find, replace: cur.replacement, ...req.body });
+    const rule = cleanRule({ field: cur.field, find: cur.find, replace: cur.replacement, whole_word: !!cur.whole_word, ...req.body });
     const dup = await db.get('SELECT id FROM name_rules WHERE field = ? AND lower(find) = lower(?) AND id <> ?', rule.field, rule.find, id);
     if (dup) throw new HttpError(409, `Já existe uma regra para "${rule.find}" neste campo (#${dup.id})`);
     const active = req.body.active === undefined ? cur.active : req.body.active ? 1 : 0;
-    await db.run("UPDATE name_rules SET field = ?, find = ?, replacement = ?, active = ?, updated_at = datetime('now') WHERE id = ?",
-      rule.field, rule.find, rule.replace, active, id);
+    await db.run("UPDATE name_rules SET field = ?, find = ?, replacement = ?, whole_word = ?, active = ?, updated_at = datetime('now') WHERE id = ?",
+      rule.field, rule.find, rule.replace, rule.wholeWord ? 1 : 0, active, id);
     await loadDictionary();
     res.json(ruleOut(await db.get('SELECT * FROM name_rules WHERE id = ?', id)));
   });

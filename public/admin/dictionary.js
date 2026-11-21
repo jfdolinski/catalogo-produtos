@@ -22,6 +22,7 @@ const ruleBody = () => ({
   field: dictForm.elements.field.value,
   find: dictForm.elements.find.value.trim(),
   replace: dictForm.elements.replace.value.trim(),
+  whole_word: dictForm.elements.whole_word.checked,
 });
 
 async function loadDictionary() {
@@ -37,7 +38,7 @@ function drawRules() {
   $('#dict-rows').innerHTML = dict.rules.length ? dict.rules.map((r) => `
     <tr class="${r.active ? '' : 'muted'}" data-id="${r.id}">
       <td>${esc(dict.fields[r.field] || r.field)}</td>
-      <td><code>${esc(r.find)}</code></td>
+      <td><code>${esc(r.find)}</code>${r.whole_word ? ' <span class="st">palavra inteira</span>' : ''}</td>
       <td>${r.replace ? esc(r.replace) : '<span class="muted">(tira o trecho)</span>'}</td>
       <td class="small">${r.applied_at ? `${fmtN(r.applied_count)} produto(s) em ${fmtDate(r.applied_at)}` : '<span class="muted">só daqui para frente</span>'}</td>
       <td><input type="checkbox" data-act="toggle" ${r.active ? 'checked' : ''} aria-label="Regra ativa"></td>
@@ -58,7 +59,7 @@ async function showPreview(body) {
   $('#dict-preview').classList.remove('hidden');
   const extra = p.total > p.items.length ? ` (mostrando os ${fmtN(p.items.length)} primeiros)` : '';
   $('#dict-preview-summary').innerHTML = p.total
-    ? `<strong>${fmtN(p.total)} produto(s)</strong> mudariam${extra}. Confira antes de aplicar: a troca vale em qualquer trecho do texto.`
+    ? `<strong>${fmtN(p.total)} produto(s)</strong> mudariam${extra}. Confira antes de aplicar${body.whole_word ? '.' : ': a troca vale em qualquer trecho do texto, até dentro de outras palavras (marque "Só palavra inteira" para evitar).'}`
     : `Nenhum produto atual muda com esta regra${p.matches ? ` (${fmtN(p.matches)} contêm o trecho, mas já estão como a regra quer)` : ''}. Ela vale para o que for cadastrado daqui para frente.`;
   $('#dict-save-apply').textContent = body.id ? `Salvar e aplicar em ${fmtN(p.total)}` : `Salvar regra e aplicar em ${fmtN(p.total)} produto(s)`;
   $('#dict-save-apply').disabled = !p.total;
@@ -133,6 +134,7 @@ $('#dict-rows').addEventListener('click', async (e) => {
       dictForm.elements.field.value = rule.field;
       dictForm.elements.find.value = rule.find;
       dictForm.elements.replace.value = rule.replace;
+      dictForm.elements.whole_word.checked = rule.whole_word;
       $('#dict-cancel').classList.remove('hidden');
       setMsg('#dict-msg', `Editando a regra "${rule.find}". Clique em Ver prévia para conferir e salvar.`);
       dictForm.elements.find.focus();
@@ -143,6 +145,7 @@ $('#dict-rows').addEventListener('click', async (e) => {
       dictForm.elements.field.value = rule.field;
       dictForm.elements.find.value = rule.find;
       dictForm.elements.replace.value = rule.replace;
+      dictForm.elements.whole_word.checked = rule.whole_word;
       $('#dict-cancel').classList.remove('hidden');
       await showPreview(ruleBody());
     }

@@ -140,10 +140,13 @@ export function replaceAll(text, find, replace) {
 export function applyDictionary(field, text, rules = dictionary) {
   const rs = rules
     .filter((r) => r.field === field && r.active !== false && r.find)
-    .map((r) => ({ find: r.find, replace: r.replace ?? '', lf: lower(r.find), lr: lower(r.replace ?? '') }))
+    .map((r) => ({ find: r.find, replace: r.replace ?? '', lf: lower(r.find), lr: lower(r.replace ?? ''), word: !!r.wholeWord }))
     .sort((a, b) => b.find.length - a.find.length);
   if (!rs.length || !text) return text;
   const low = lower(text);
+  // "Só palavra inteira": antes e depois do trecho não pode haver letra nem número ("Gen" não casa em "Sustagen")
+  const isWordChar = (ch) => !!ch && /[\p{L}\p{N}]/u.test(ch);
+  const wordAt = (at, len) => !isWordChar(text[at - 1]) && !isWordChar(text[at + len]);
   let out = '';
   let changed = false;
   let i = 0;
@@ -151,8 +154,11 @@ export function applyDictionary(field, text, rules = dictionary) {
     let step = null;
     for (const r of rs) {
       // Expansão já aplicada antes (ex.: "Comprimidos" para a regra Comp): mantém e pula
-      if (r.replace.length > r.find.length && low.startsWith(r.lr, i)) { step = [text.slice(i, i + r.replace.length), r.replace.length]; break; }
-      if (low.startsWith(r.lf, i)) {
+      if (r.replace.length > r.find.length && low.startsWith(r.lr, i) && (!r.word || wordAt(i, r.replace.length))) {
+        step = [text.slice(i, i + r.replace.length), r.replace.length];
+        break;
+      }
+      if (low.startsWith(r.lf, i) && (!r.word || wordAt(i, r.find.length))) {
         const here = text.slice(i, i + r.find.length);
         step = here === r.replace ? [here, here.length] : [r.replace, r.find.length];
         if (here !== r.replace) changed = true;

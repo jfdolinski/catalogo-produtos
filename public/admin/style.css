@@ -562,3 +562,7 @@ code.wrap { word-break: break-all; }
 .dash-table-wrap .dict-table th:first-child, .dash-table-wrap .dict-table td:first-child { max-width: none; min-width: 0; }
 .dash-table-wrap .dict-preview-table th:first-child, .dash-table-wrap .dict-preview-table td:first-child { width: 70px; }
 .dash-table-wrap .dict-rules-table th:first-child, .dash-table-wrap .dict-rules-table td:first-child { width: 100px; }
+
+.dict-form { grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+.dict-form .dict-word { display: flex; gap: 6px; align-items: center; white-space: nowrap; padding-bottom: 8px; }
+@media (max-width: 800px) { .dict-form { grid-template-columns: 1fr; } }

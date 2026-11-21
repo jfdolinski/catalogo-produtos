@@ -13,6 +13,9 @@ const regras = [{ field: 'name', find: 'Sol', replace: 'Sólido' }, { field: 'na
   .sort((a, b) => b.find.length - a.find.length);
 ok('trecho maior vem primeiro', applyDictionary('name', 'Xarope Sol Oral', regras) === 'Xarope Solução Oral', applyDictionary('name', 'Xarope Sol Oral', regras));
 ok('trocar por vazio tira o trecho e os espaços', applyDictionary('name', 'Dipirona Gen 500mg', [{ field: 'name', find: 'Gen', replace: '' }]) === 'Dipirona 500mg');
+const inteira = [{ field: 'name', find: 'Gen', replace: 'Genérico', wholeWord: true }];
+ok('palavra inteira: não troca dentro de outra palavra', applyDictionary('name', 'Sustagen e Gengibre Gen', inteira) === 'Sustagen e Gengibre Genérico', applyDictionary('name', 'Sustagen e Gengibre Gen', inteira));
+ok('palavra inteira: pontuação conta como limite', applyDictionary('name', 'Losartana (Gen)', inteira) === 'Losartana (Genérico)');
 ok('regra de outro campo não vale', applyDictionary('brand', 'Gen', [{ field: 'name', find: 'Gen', replace: 'X' }]) === 'Gen');
 
 const st = await startStack();
@@ -68,6 +71,20 @@ try {
   ok('exclui a regra', (await api('DELETE', `/api/admin/dictionary/${r.b.id}`)).s === 204);
   ok('validação: trecho vazio', (await api('POST', '/api/admin/dictionary', { field: 'name', find: ' ', replace: 'x' })).s === 400);
   ok('validação: campo inválido', (await api('POST', '/api/admin/dictionary', { field: 'unit', find: 'cx', replace: 'CX' })).s === 400);
+
+  // Só palavra inteira
+  const s1 = await api('POST', '/api/admin/products', { name: 'SUSTAGEN BAUNILHA 400G', barcodes: [gtin('789100031705')] });
+  const s2 = await api('POST', '/api/admin/products', { name: 'ENALAPRIL 10MG GEN', barcodes: [gtin('789100031706')] });
+  const pw = await api('POST', '/api/admin/dictionary/preview', { field: 'name', find: 'Gen', replace: 'Genérico', whole_word: true });
+  ok('palavra inteira: prévia não pega trecho dentro de outra palavra', !pw.b.items.some((i) => i.id === s1.b.id) && pw.b.items.some((i) => i.id === s2.b.id), pw.b.items.map((i) => i.before));
+  const w = await api('POST', '/api/admin/dictionary', { field: 'name', find: 'Gen', replace: 'Genérico', whole_word: true });
+  ok('regra guarda a opção', w.s === 201 && w.b.whole_word === true, w.b);
+  await api('POST', `/api/admin/dictionary/${w.b.id}/apply`);
+  ok('aplica só na palavra inteira', (await api('GET', `/api/admin/products/${s2.b.id}`)).b.name === 'Enalapril 10mg Genérico'
+    && (await api('GET', `/api/admin/products/${s1.b.id}`)).b.name === 'Sustagen Baunilha 400g');
+  const off2 = await api('PUT', `/api/admin/dictionary/${w.b.id}`, { active: false });
+  ok('desativar mantém a opção palavra inteira', off2.b.whole_word === true && off2.b.active === false, off2.b);
+  await api('DELETE', `/api/admin/dictionary/${w.b.id}`);
 
   // Depois de reiniciar, as regras ativas continuam valendo
   await st.restart();

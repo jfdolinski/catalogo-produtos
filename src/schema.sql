@@ -460,3 +460,5 @@ CREATE TABLE IF NOT EXISTS name_rules (
   updated_at  text NOT NULL DEFAULT sqlite_datetime('now')
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_name_rules_find ON name_rules (field, lower(find));
+-- Regra só para palavra inteira: o trecho não casa dentro de outra palavra ("Gen" não muda "Sustagen")
+ALTER TABLE name_rules ADD COLUMN IF NOT EXISTS whole_word integer NOT NULL DEFAULT 0;
