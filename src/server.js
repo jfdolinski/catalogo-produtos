@@ -19,6 +19,7 @@ import { mountAppDevices, DOWNLOADS_DIR } from './app-devices.js';
 import { auditAppWrites, mountAppAudit } from './app-audit.js';
 import { mountSignup } from './signup.js';
 import { runCaseCleanup } from './case-cleanup.js';
+import { mountDictionary, loadDictionary } from './dictionary.js';
 import { analyzeBarcode } from './barcode.js';
 import { readSpreadsheet, FIELD_LABELS } from './importer.js';
 import { providers, lookupOne } from './lookup.js';
@@ -704,6 +705,8 @@ mountBusiness(admin);
 mountTax(admin);
 mountAppDevices(app, admin, baseUrl);
 mountAppAudit(admin);
+mountDictionary(admin, { applyFields });
+await loadDictionary(); // regras na memória antes de aceitar gravações
 
 admin.get('/products', async (req, res) => {
   const r = await searchProducts(req.query);

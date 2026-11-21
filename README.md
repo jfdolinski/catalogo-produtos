@@ -246,6 +246,12 @@ Nome, marca, fabricante e categoria dos produtos ficam com a primeira letra de c
 
 Os produtos já cadastrados foram convertidos uma vez, em segundo plano, ao subir a versão (`src/case-cleanup.js`, marca `migr_maiusculas_por_palavra` em settings); cada valor antigo está em `text_cleanup_log` com status `maiusculas`.
 
+## Dicionário de correções
+
+Tela **Dicionário** (`/#/dicionario`, permissão "Produtos"). Cada regra tem um campo (nome, marca, fabricante ou categoria), um trecho a procurar e o texto que entra no lugar (vazio tira o trecho). A procura vale em qualquer parte do texto, sem diferenciar maiúsculas. As regras ativas valem sozinhas em toda entrada de dados, depois das maiúsculas por palavra (`applyDictionary` em `src/text.js`): numa passada só, o trecho mais longo primeiro, sem trocar de novo o que já foi trocado ("Comp" → "Comprimidos" não repete em "Comprimidos").
+
+Ao cadastrar ou editar uma regra, **Ver prévia** mostra os produtos atuais que mudariam (antes → depois). Daí: **Salvar e aplicar** (corrige esses produtos, sem renovar o prazo de atualização) ou **Só salvar** (vale daqui para frente). **Testar um texto** mostra como um nome fica com todas as regras. Como a procura é por trecho, confira a prévia: "Gen" → "Genérico" também muda "Gentamicina". Rotas em `/api/admin/dictionary` (`src/dictionary.js`).
+
 ## Nomes dos produtos (planilha)
 
 A tela **Nomes** (`/#/nomes`, permissão "Produtos") mostra o catálogo como uma planilha. São editáveis Nome, Marca, Fabricante e Categoria (as três últimas sugerem os valores já cadastrados), e dá para filtrar por marca, fabricante e categoria (digite `(vazio)` para ver os produtos sem o valor); as alterações ficam

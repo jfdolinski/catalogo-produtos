@@ -86,6 +86,7 @@ const RULES = [
   [null, /^\/summary$/, ['produtos', 'dashboard']],
   [null, /^\/(merge|bulk|product-names)$/, ['produtos']],
   ['POST', /^\/field-values\/\w+\/rename$/, ['produtos']], // renomear vale para todos os produtos
+  [null, /^\/dictionary(\/|$)/, ['produtos']], // dicionário de correções
   ['DELETE', /^\/products\/\d+$/, ['produtos']],
   [null, /^\/(lookup|import|autofill|xml-import)(\/|$)/, ['atualizacao']],
   ['GET', /^\/ai\/status$/, ['atualizacao', 'produtos']],

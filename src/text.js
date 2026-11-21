@@ -96,5 +96,70 @@ export function caseWords(text) {
 export function cleanProductField(field, value) {
   const v = cleanField(field, value);
   if (!CASE_FIELDS.has(field) || v.startsWith(PROVISIONAL_NAME)) return v;
-  return caseWords(v);
+  return applyDictionary(field, caseWords(v));
+}
+
+// ---- Dicionário de correções (dictionary.js grava as regras; aqui só a aplicação, sem banco) ----
+// Cada regra: { field, find, replace }. Procura o trecho em qualquer lugar do texto, sem diferenciar maiúsculas,
+// e troca pelo texto da regra exatamente como foi escrito. Roda depois das maiúsculas por palavra.
+let dictionary = [];
+export function setDictionary(rules) {
+  // Trechos maiores primeiro: "Sol Oral" é trocado antes de "Sol"
+  dictionary = rules.filter((r) => r.find).slice().sort((a, b) => b.find.length - a.find.length || (a.id ?? 0) - (b.id ?? 0));
+}
+
+/** Troca todas as ocorrências de find por replace. Não troca de novo o que já está trocado (Comp -> Comprimido). */
+export function replaceAll(text, find, replace) {
+  const lowText = lower(text);
+  const lowFind = lower(find);
+  const lowRep = lower(replace);
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const at = lowText.indexOf(lowFind, i);
+    if (at < 0) break;
+    const here = text.slice(at, at + replace.length);
+    // Já está como a regra quer (exatamente, ou é a expansão já aplicada em outra caixa): pula o trecho inteiro
+    // (trocar por vazio nunca "já está trocado": sem esta condição o laço não sairia do lugar)
+    if (replace && (here === replace || (replace.length > find.length && lower(here) === lowRep))) {
+      out += text.slice(i, at + replace.length);
+      i = at + replace.length;
+      continue;
+    }
+    out += text.slice(i, at) + replace;
+    i = at + find.length;
+  }
+  return out + text.slice(i);
+}
+
+/**
+ * Aplica todas as regras do campo numa passada só, da esquerda para a direita: em cada posição vale o trecho
+ * mais longo que casar. O texto que uma regra colocou não é procurado de novo por outra
+ * ("Sol Oral" -> "Solução Oral" não vira "Sólidoução Oral" por causa de "Sol" -> "Sólido").
+ */
+export function applyDictionary(field, text, rules = dictionary) {
+  const rs = rules
+    .filter((r) => r.field === field && r.active !== false && r.find)
+    .map((r) => ({ find: r.find, replace: r.replace ?? '', lf: lower(r.find), lr: lower(r.replace ?? '') }))
+    .sort((a, b) => b.find.length - a.find.length);
+  if (!rs.length || !text) return text;
+  const low = lower(text);
+  let out = '';
+  let changed = false;
+  let i = 0;
+  while (i < text.length) {
+    let step = null;
+    for (const r of rs) {
+      // Expansão já aplicada antes (ex.: "Comprimidos" para a regra Comp): mantém e pula
+      if (r.replace.length > r.find.length && low.startsWith(r.lr, i)) { step = [text.slice(i, i + r.replace.length), r.replace.length]; break; }
+      if (low.startsWith(r.lf, i)) {
+        const here = text.slice(i, i + r.find.length);
+        step = here === r.replace ? [here, here.length] : [r.replace, r.find.length];
+        if (here !== r.replace) changed = true;
+        break;
+      }
+    }
+    if (step) { out += step[0]; i += step[1]; } else { out += text[i]; i++; }
+  }
+  return changed ? cleanLine(out) : text;
 }

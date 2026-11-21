@@ -62,6 +62,7 @@
           <a href="#/produtos" data-view="produtos" data-perm="produtos">Produtos</a>
           <a href="#/nomes" data-view="nomes" data-perm="produtos">Nomes</a>
           <a href="#/valores" data-view="valores" data-perm="produtos">Marcas e categorias</a>
+          <a href="#/dicionario" data-view="dicionario" data-perm="produtos">Dicionário</a>
           <a href="#/atualizar" data-view="atualizar" data-perm="atualizacao">Atualização</a>
           <a href="#/ncm" data-view="ncm" data-perm="ncm">NCM</a>
           <a href="#/dcb" data-view="dcb" data-perm="dcb">DCB</a>
@@ -189,6 +190,67 @@
 
     <!-- NCM -->
     <!-- Marcas, fabricantes e categorias: renomear ou juntar valores em todos os produtos -->
+    <!-- Dicionário de correções: trecho procurado -> texto novo, aplicado sozinho em toda entrada de dados -->
+    <section id="dictionary" class="page hidden">
+      <div class="dash-head">
+        <div>
+          <h1>Dicionário de correções</h1>
+          <div class="muted small">Cada regra troca um trecho por outro texto, sem diferenciar maiúsculas, em qualquer lugar do campo escolhido.
+            Vale sozinha para tudo que for cadastrado ou alterado (painel, planilha, app, importações). Antes de salvar, a prévia mostra
+            os produtos atuais que mudariam, e você decide se aplica neles também.</div>
+        </div>
+      </div>
+      <form id="dict-form" class="panel dict-form" autocomplete="off">
+        <input type="hidden" name="id">
+        <label>Campo
+          <select name="field">
+            <option value="name">Nome</option>
+            <option value="brand">Marca</option>
+            <option value="manufacturer">Fabricante</option>
+            <option value="category">Categoria</option>
+          </select>
+        </label>
+        <label>Procurar<input name="find" maxlength="120" required placeholder="ex.: Comp"></label>
+        <label>Trocar por<input name="replace" maxlength="200" placeholder="ex.: Comprimidos (vazio = tirar)"></label>
+        <div class="dict-actions">
+          <button type="submit" class="primary" id="dict-preview-btn">Ver prévia</button>
+          <button type="button" id="dict-cancel" class="hidden">Cancelar edição</button>
+        </div>
+      </form>
+      <p id="dict-msg" class="msg" role="alert"></p>
+      <div id="dict-preview" class="panel hidden">
+        <p id="dict-preview-summary"></p>
+        <div class="dict-actions">
+          <button type="button" class="primary" id="dict-save-apply">Salvar e aplicar</button>
+          <button type="button" id="dict-save-only">Só salvar a regra</button>
+          <button type="button" id="dict-preview-close">Fechar prévia</button>
+        </div>
+        <div class="dash-table-wrap">
+          <table class="dash-table dict-table dict-preview-table">
+            <thead><tr><th>Produto</th><th>Antes</th><th>Depois</th></tr></thead>
+            <tbody id="dict-preview-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel dict-test">
+        <strong>Testar um texto</strong>
+        <div class="dict-test-row">
+          <select id="dict-test-field" aria-label="Campo do teste">
+            <option value="name">Nome</option><option value="brand">Marca</option><option value="manufacturer">Fabricante</option><option value="category">Categoria</option>
+          </select>
+          <input id="dict-test-text" placeholder="Digite um nome para ver como fica com todas as regras" aria-label="Texto para testar">
+        </div>
+        <div id="dict-test-result" class="small"></div>
+      </div>
+      <h2 class="dict-h2">Regras</h2>
+      <div class="dash-table-wrap">
+        <table class="dash-table dict-table dict-rules-table">
+          <thead><tr><th>Campo</th><th>Procurar</th><th>Trocar por</th><th>Aplicada</th><th>Ativa</th><th>Ações</th></tr></thead>
+          <tbody id="dict-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="values" class="page hidden">
       <div class="dash-head">
         <div>
@@ -1345,5 +1407,6 @@
   <script src="xml-import.js"></script>
   <script src="names.js"></script>
   <script src="values.js"></script>
+  <script src="dictionary.js"></script>
 </body>
 </html>

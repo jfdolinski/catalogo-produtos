@@ -959,6 +959,7 @@ const VIEWS = {
   atualizar: { perm: 'atualizacao' },
   nomes: { perm: 'produtos', page: '#names', open: () => window.onNamesView?.() },
   valores: { perm: 'produtos', page: '#values', open: () => window.onValuesView?.() },
+  dicionario: { perm: 'produtos', page: '#dictionary', open: () => window.onDictionaryView?.() },
   ncm: { perm: 'ncm', page: '#ncm', open: () => window.onNcmView?.() },
   dcb: { perm: 'dcb', page: '#dcb', open: () => window.onDcbView?.() },
   empresas: { perm: 'empresas', page: '#companies', open: () => window.onCompaniesView?.() },

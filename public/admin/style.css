@@ -536,3 +536,29 @@ code.wrap { word-break: break-all; }
 #signup-form h1, #signup-done h1 { text-align: center; }
 #signup-done p { line-height: 1.5; }
 .st-pendente { border-color: #b45309; color: #b45309; }
+
+/* Dicionário de correções */
+.dict-form { display: grid; grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px 12px; align-items: end; margin: 12px 0; }
+.dict-form label { display: grid; gap: 4px; font-size: 13px; }
+.dict-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#dict-preview { margin: 8px 0 16px; }
+.dict-table td { vertical-align: top; }
+.dict-table mark { background: #fde68a; color: inherit; padding: 0 1px; border-radius: 2px; }
+.dict-table .after mark { background: #bbf7d0; }
+.dict-test { margin: 12px 0; display: grid; gap: 8px; }
+.dict-test-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.dict-test-row input { flex: 1 1 280px; }
+.dict-h2 { font-size: 16px; margin: 16px 0 8px; }
+@media (max-width: 800px) { .dict-form { grid-template-columns: 1fr; } }
+/* Dicionário: larguras das colunas (o texto quebra nas colunas largas) */
+.dict-table { table-layout: fixed; }
+.dict-table td, .dict-table th { white-space: normal; overflow-wrap: anywhere; }
+.dict-preview-table th:nth-child(1) { width: 70px; }
+.dict-rules-table th:nth-child(1) { width: 100px; }
+.dict-rules-table th:nth-child(4) { width: 190px; }
+.dict-rules-table th:nth-child(5) { width: 50px; }
+.dict-rules-table th:nth-child(6) { width: 270px; }
+/* A regra geral das tabelas estica a 1ª coluna; aqui as larguras são as de cima */
+.dash-table-wrap .dict-table th:first-child, .dash-table-wrap .dict-table td:first-child { max-width: none; min-width: 0; }
+.dash-table-wrap .dict-preview-table th:first-child, .dash-table-wrap .dict-preview-table td:first-child { width: 70px; }
+.dash-table-wrap .dict-rules-table th:first-child, .dash-table-wrap .dict-rules-table td:first-child { width: 100px; }
