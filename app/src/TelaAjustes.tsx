@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { AJUSTES_PADRAO, OPCOES_CAMERA, type AjustesCamera } from './regras';
-import { Botao, Cartao, cores } from './ui';
+import { BarraAcoes, Botao, Cartao, cores, LinhaBotoes } from './ui';
 
 type Opcao = keyof typeof OPCOES_CAMERA;
 
@@ -46,7 +46,8 @@ export function TelaAjustes({ ajustes, aoMudar, aoVoltar }: { ajustes: AjustesCa
   }
 
   return (
-    <ScrollView contentContainerStyle={estilos.pagina}>
+    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={estilos.pagina}>
       <Text style={estilos.titulo}>Ajustes da câmera</Text>
       <Text style={estilos.texto}>Valem para as fotos dos produtos e ficam guardados neste celular.</Text>
 
@@ -67,10 +68,14 @@ export function TelaAjustes({ ajustes, aoMudar, aoVoltar }: { ajustes: AjustesCa
         <Escolha campo="maxFotos" titulo="Fotos por produto, de cada vez" />
       </Cartao>
 
-      <Botao titulo="Restaurar o padrão" variante="secundario" onPress={() => aoMudar(AJUSTES_PADRAO)} />
-      <View style={{ height: 8 }} />
-      <Botao titulo="Voltar" onPress={aoVoltar} />
     </ScrollView>
+    <BarraAcoes>
+      <LinhaBotoes>
+        <View style={{ flex: 1 }}><Botao titulo="Restaurar o padrão" variante="secundario" onPress={() => aoMudar(AJUSTES_PADRAO)} /></View>
+        <View style={{ flex: 1 }}><Botao titulo="Voltar" onPress={aoVoltar} /></View>
+      </LinhaBotoes>
+    </BarraAcoes>
+    </View>
   );
 }
 

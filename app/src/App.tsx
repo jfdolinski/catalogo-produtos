@@ -14,7 +14,7 @@ import { TelaFotos } from './TelaFotos';
 import { TelaNovo } from './TelaNovo';
 import { TelaProduto } from './TelaProduto';
 import { TelaVincular } from './TelaVincular';
-import { Alerta, Botao, cores } from './ui';
+import { Alerta, BarraAcoes, Botao, cores } from './ui';
 
 const SEM_CAMERA = 'Sem permissão para usar a câmera. Libere nas configurações do Android.';
 
@@ -331,7 +331,8 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
           <Text style={estilos.texto}>Enviando foto {Math.min(tela.feitas + 1, tela.total)} de {tela.total}: {tela.produto.name}…</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+        <View style={{ flex: 1 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
           <View style={estilos.abas} accessibilityRole="tablist">
             {(['ler', 'fila'] as const).map((a) => (
               <Pressable key={a} accessibilityRole="tab" accessibilityState={{ selected: aba === a }} onPress={() => trocarAba(a)} style={[estilos.aba, aba === a && estilos.abaAtiva]}>
@@ -339,8 +340,54 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
               </Pressable>
             ))}
           </View>
+          {aba === 'fila' ? (
+            <>
+              {erro ? <Alerta>{erro}</Alerta> : null}
+              {resumo ? <Alerta tipo="ok">{resumo}</Alerta> : null}
+              <Text style={estilos.rotulo}>Itens da fila</Text>
+              {ORIGENS.map((o) => (
+                <Pressable key={o.valor || 'todos'} accessibilityRole="radio" accessibilityState={{ checked: origem === o.valor }} onPress={() => setOrigem(o.valor)} style={[estilos.opcao, origem === o.valor && estilos.opcaoAtiva]}>
+                  <View style={[estilos.radio, origem === o.valor && estilos.radioAtivo]} />
+                  <Text style={estilos.opcaoTexto}>{o.nome}</Text>
+                </Pressable>
+              ))}
+              <Text style={estilos.ajuda}>Revise os cadastros um a um, como no painel: fotos, nome, marca e categoria. "Salvar e próximo" grava, renova o prazo e tira dos pendentes.</Text>
+            </>
+          ) : (
+            <>
+              {/* Campo e botões no alto: ficam à vista mesmo com o teclado aberto */}
+              <View style={estilos.linha}>
+                <TextInput
+                  ref={campo}
+                  autoFocus
+                  accessibilityLabel="Código de barras"
+                  style={[estilos.campo, { flex: 1 }]}
+                  value={digitado}
+                  onChangeText={setDigitado}
+                  keyboardType="number-pad"
+                  returnKeyType="search"
+                  maxLength={20}
+                  placeholder="Código de barras"
+                  placeholderTextColor="#94a3b8"
+                  onSubmitEditing={() => void buscar(digitado, false)}
+                />
+                <View style={{ width: 104 }}>
+                  <Botao titulo="Buscar" variante="secundario" ocupado={tela.qual === 'buscando'} disabled={!digitado.trim()} onPress={() => void buscar(digitado, false)} />
+                </View>
+              </View>
+              {tela.qual === 'buscando' ? <Text style={estilos.ajuda}>Buscando {tela.codigo}…</Text> : null}
+              {erro ? <View style={{ marginTop: 8 }}><Alerta>{erro}</Alerta></View> : null}
+              {Platform.OS !== 'web' ? (
+                <View style={{ marginTop: 10 }}>
+                  <Botao titulo="📷 Ler código com a câmera" disabled={tela.qual === 'buscando'} onPress={() => void temCamera().then((ok) => ok && setTela({ qual: 'camera-codigo' }))} />
+                </View>
+              ) : null}
+              {resumo ? <View style={{ marginTop: 12 }}><Alerta tipo="ok">{resumo}</Alerta></View> : null}
+              <Text style={[estilos.ajuda, { marginTop: 12 }]}>Leia ou digite o código de barras. Produto com foto abre as fotos; sem foto, abre a câmera; não cadastrado, você cadastra na hora.</Text>
+            </>
+          )}
           {atualizacao ? (
-            <Pressable disabled={atualizacao.estado === 'baixando'} onPress={() => void atualizar(atualizacao.versao)}>
+            <Pressable style={{ marginTop: 12 }} disabled={atualizacao.estado === 'baixando'} onPress={() => void atualizar(atualizacao.versao)}>
               <Alerta tipo="aviso">
                 {atualizacao.estado === 'baixando'
                   ? `Baixando a versão ${atualizacao.versao} do aplicativo…`
@@ -350,56 +397,14 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
               </Alerta>
             </Pressable>
           ) : null}
-          {resumo ? <Alerta tipo="ok">{resumo}</Alerta> : null}
-          {erro ? <Alerta>{erro}</Alerta> : null}
-          {aba === 'fila' ? (
-            <>
-              <Text style={estilos.titulo}>Fila de atualização</Text>
-              <Text style={estilos.texto}>Revise os cadastros um a um, como no painel: fotos, nome, marca e categoria. "Salvar e próximo" grava, renova o prazo e tira dos pendentes.</Text>
-              <Text style={estilos.rotulo}>Itens</Text>
-              {ORIGENS.map((o) => (
-                <Pressable key={o.valor || 'todos'} accessibilityRole="radio" accessibilityState={{ checked: origem === o.valor }} onPress={() => setOrigem(o.valor)} style={[estilos.opcao, origem === o.valor && estilos.opcaoAtiva]}>
-                  <View style={[estilos.radio, origem === o.valor && estilos.radioAtivo]} />
-                  <Text style={estilos.opcaoTexto}>{o.nome}</Text>
-                </Pressable>
-              ))}
-              <View style={{ height: 12 }} />
-              <Botao titulo="Iniciar fila" onPress={() => void iniciarFila()} />
-            </>
-          ) : (
-            <>
-              <Text style={estilos.titulo}>Atualizar cadastro</Text>
-              <Text style={estilos.texto}>Leia o código de barras do produto. Se ele já estiver cadastrado, a câmera abre para as fotos; se não, você cadastra na hora.</Text>
-              <Text style={estilos.rotulo}>Código de barras</Text>
-          <View style={estilos.linha}>
-            <TextInput
-              ref={campo}
-              autoFocus
-              accessibilityLabel="Código de barras"
-              style={[estilos.campo, { flex: 1 }]}
-              value={digitado}
-              onChangeText={setDigitado}
-              keyboardType="number-pad"
-              returnKeyType="search"
-              maxLength={20}
-              placeholder="7891234567895"
-              placeholderTextColor="#94a3b8"
-              onSubmitEditing={() => void buscar(digitado, false)}
-            />
-            <View style={{ width: 110 }}>
-              <Botao titulo="Buscar" variante="secundario" ocupado={tela.qual === 'buscando'} disabled={!digitado.trim()} onPress={() => void buscar(digitado, false)} />
-            </View>
-          </View>
-          {tela.qual === 'buscando' ? <Text style={estilos.ajuda}>Buscando {tela.codigo}…</Text> : null}
-              {Platform.OS !== 'web' ? (
-                <View style={{ marginTop: 16 }}>
-                  <Botao titulo="📷 Ler código com a câmera" disabled={tela.qual === 'buscando'} onPress={() => void temCamera().then((ok) => ok && setTela({ qual: 'camera-codigo' }))} />
-                </View>
-              ) : null}
-            </>
-          )}
-          <Text style={[estilos.ajuda, { marginTop: 24 }]}>Versão {versaoInstalada()}</Text>
+          <Text style={[estilos.ajuda, { marginTop: 16 }]}>Versão {versaoInstalada()}</Text>
         </ScrollView>
+        {aba === 'fila' ? (
+          <BarraAcoes>
+            <Botao titulo="Iniciar fila" onPress={() => void iniciarFila()} />
+          </BarraAcoes>
+        ) : null}
+        </View>
       )}
     </View>
   );
@@ -418,12 +423,12 @@ const estilos = StyleSheet.create({
   linha: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   campo: { minHeight: 48, borderWidth: 1, borderColor: cores.borda, borderRadius: 8, backgroundColor: cores.branco, paddingHorizontal: 12, fontSize: 18, color: cores.texto, letterSpacing: 1 },
   ajuda: { fontSize: 13, color: cores.suave, marginTop: 8 },
-  abas: { flexDirection: 'row', backgroundColor: cores.borda, borderRadius: 10, padding: 3, marginBottom: 16 },
+  abas: { flexDirection: 'row', backgroundColor: cores.borda, borderRadius: 10, padding: 3, marginBottom: 12 },
   aba: { flex: 1, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   abaAtiva: { backgroundColor: cores.branco },
   abaTexto: { fontSize: 15, fontWeight: '600', color: cores.suave },
   abaTextoAtivo: { color: cores.marca },
-  opcao: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 12, borderWidth: 1, borderColor: cores.borda, borderRadius: 8, backgroundColor: cores.branco, marginBottom: 8 },
+  opcao: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: cores.borda, borderRadius: 8, backgroundColor: cores.branco, marginBottom: 6 },
   opcaoAtiva: { borderColor: cores.marca },
   opcaoTexto: { fontSize: 15, color: cores.texto, flex: 1 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: cores.suave },

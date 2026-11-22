@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View
 import { ErroApi, type Api, type Produto } from './api';
 import { sugestoesUteis, type Sugestao } from './regras';
 import { CampoSugestao } from './CampoSugestao';
-import { Alerta, Botao, Cartao, cores } from './ui';
+import { Alerta, BarraAcoes, Botao, Cartao, cores, LinhaBotoes } from './ui';
 
 const mensagem = (e: unknown) => (e instanceof ErroApi ? e.message : 'Algo deu errado. Tente de novo.');
 
@@ -67,7 +67,8 @@ export function TelaNovo({ api, codigo, aoCadastrar, aoVoltar }: { api: Api; cod
   }
 
   return (
-    <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
       <Text style={estilos.titulo}>Produto não cadastrado</Text>
       <Text style={estilos.codigo}>{codigo}</Text>
       {erro ? <Alerta>{erro}</Alerta> : null}
@@ -104,10 +105,15 @@ export function TelaNovo({ api, codigo, aoCadastrar, aoVoltar }: { api: Api; cod
         <TextInput accessibilityLabel="Nome" style={estilos.campo} value={nome} onChangeText={setNome} autoCapitalize="sentences" maxLength={300} multiline />
         <CampoSugestao api={api} campo="brand" rotulo="Marca" valor={marca} aoMudar={setMarca} />
         <CampoSugestao api={api} campo="category" rotulo="Categoria" valor={categoria} aoMudar={setCategoria} />
-        <Botao titulo="Cadastrar e tirar as fotos" ocupado={enviando} onPress={() => void cadastrar()} />
       </Cartao>
-      <Botao titulo="Voltar sem cadastrar" variante="secundario" disabled={enviando} onPress={aoVoltar} />
     </ScrollView>
+    <BarraAcoes>
+      <LinhaBotoes>
+        <View style={{ flex: 1 }}><Botao titulo="Voltar" variante="secundario" disabled={enviando} onPress={aoVoltar} /></View>
+        <View style={{ flex: 2 }}><Botao titulo="Cadastrar e fotografar" ocupado={enviando} onPress={() => void cadastrar()} /></View>
+      </LinhaBotoes>
+    </BarraAcoes>
+    </View>
   );
 }
 

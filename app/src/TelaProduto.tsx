@@ -3,7 +3,7 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { ErroApi, type Api, type Produto } from './api';
 import { CampoSugestao } from './CampoSugestao';
 import { comoPrincipal } from './regras';
-import { Alerta, Botao, Cartao, cores } from './ui';
+import { Alerta, BarraAcoes, Botao, Cartao, cores, LinhaBotoes } from './ui';
 
 const mensagem = (e: unknown) => (e instanceof ErroApi ? e.message : 'Algo deu errado. Tente de novo.');
 
@@ -120,7 +120,8 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
   }
 
   return (
-    <ScrollView contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={estilos.pagina} keyboardShouldPersistTaps="handled">
       {fila ? <Text style={estilos.posicao}>Fila: item {fila.posicao} de {fila.total}</Text> : null}
       <Text style={estilos.titulo}>{p.name}</Text>
       <Text style={estilos.codigos}>{p.barcodes.map((b) => b.code).join(' · ')}{p.pending ? '  ·  pendente de atualização' : ''}</Text>
@@ -140,12 +141,11 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
                 </Pressable>
               ))}
             </View>
-            <Text style={estilos.ajuda}>Toque numa foto para escolher a principal ou apagar.</Text>
+            <Text style={estilos.ajuda}>Toque numa foto para escolher a principal ou apagar. Para tirar mais, use 📷 Fotos, no rodapé.</Text>
           </>
         ) : (
-          <Text style={estilos.ajuda}>Ainda sem foto real (o catálogo mostra a imagem padrão).</Text>
+          <Text style={estilos.ajuda}>Ainda sem foto real (o catálogo mostra a imagem padrão). Use 📷 Fotos, no rodapé.</Text>
         )}
-        <Botao titulo="📷 Tirar mais fotos" variante="secundario" disabled={!!ocupado} onPress={() => aoFotografar(p)} />
       </Cartao>
 
       <Cartao>
@@ -160,19 +160,27 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
         <Text style={estilos.ajuda}>Revisado renova o prazo de atualização do cadastro e tira o produto da lista de pendentes.</Text>
       </Cartao>
 
-      {fila ? (
-        <>
-          <Botao titulo="Salvar e próximo" ocupado={ocupado === 'proximo'} disabled={!!ocupado} onPress={() => void salvarEProximo()} />
-          <View style={estilos.linha}>
-            {fila.aoAnterior ? <View style={{ flex: 1 }}><Botao titulo="Anterior" variante="secundario" disabled={!!ocupado} onPress={fila.aoAnterior} /></View> : null}
-            <View style={{ flex: 1 }}><Botao titulo="Pular" variante="secundario" disabled={!!ocupado} onPress={proximo} /></View>
-            <View style={{ flex: 1 }}><Botao titulo="Sair da fila" variante="secundario" disabled={!!ocupado} onPress={fila.aoSair} /></View>
-          </View>
-        </>
-      ) : (
-        <Botao titulo="Próximo produto" disabled={!!ocupado} onPress={proximo} />
-      )}
     </ScrollView>
+
+    {/* Ações principais sempre à vista, presas no rodapé */}
+    <BarraAcoes>
+      <LinhaBotoes>
+        <View style={{ flex: 1 }}><Botao titulo="📷 Fotos" variante="secundario" disabled={!!ocupado} onPress={() => aoFotografar(p)} /></View>
+        <View style={{ flex: 2 }}>
+          {fila
+            ? <Botao titulo="Salvar e próximo" ocupado={ocupado === 'proximo'} disabled={!!ocupado} onPress={() => void salvarEProximo()} />
+            : <Botao titulo="Próximo produto" disabled={!!ocupado} onPress={proximo} />}
+        </View>
+      </LinhaBotoes>
+      {fila ? (
+        <LinhaBotoes>
+          {fila.aoAnterior ? <View style={{ flex: 1 }}><Botao titulo="Anterior" variante="secundario" disabled={!!ocupado} onPress={fila.aoAnterior} /></View> : null}
+          <View style={{ flex: 1 }}><Botao titulo="Pular" variante="secundario" disabled={!!ocupado} onPress={proximo} /></View>
+          <View style={{ flex: 1 }}><Botao titulo="Sair da fila" variante="secundario" disabled={!!ocupado} onPress={fila.aoSair} /></View>
+        </LinhaBotoes>
+      ) : null}
+    </BarraAcoes>
+    </View>
   );
 }
 

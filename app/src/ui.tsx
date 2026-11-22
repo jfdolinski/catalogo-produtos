@@ -73,3 +73,25 @@ const estilos = StyleSheet.create({
   numeroValor: { fontSize: 26, fontWeight: '700', color: cores.texto, marginTop: 2 },
   numeroDetalhe: { fontSize: 12, color: cores.suave, marginTop: 2 },
 });
+
+/**
+ * Barra de ações presa no rodapé da tela: os botões principais ficam sempre à vista, sem precisar rolar.
+ * A tela rola por cima dela (ScrollView com flex: 1 acima). Com o teclado aberto, sobe junto (KeyboardAvoidingView no App).
+ */
+export function BarraAcoes({ children }: { children: ReactNode }) {
+  return <View style={estilosBarra.barra}>{children}</View>;
+}
+
+/** Linha de botões dentro da barra; cada filho ocupa o espaço indicado (peso). */
+export function LinhaBotoes({ children }: { children: ReactNode }) {
+  return <View style={estilosBarra.linha}>{children}</View>;
+}
+
+const estilosBarra = StyleSheet.create({
+  barra: {
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 8,
+    backgroundColor: cores.branco, borderTopWidth: 1, borderTopColor: cores.borda,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: -2 }, elevation: 8,
+  },
+  linha: { flexDirection: 'row', gap: 8 },
+});
