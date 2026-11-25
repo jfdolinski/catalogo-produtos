@@ -306,6 +306,7 @@ function importOptions() {
     resolve_pending: $('#imp-resolve').checked,
     download_images: $('#imp-images').checked,
     overwrite_empty: $('#imp-empty').checked,
+    only_unnamed: $('#imp-unnamed').checked,
   };
 }
 
@@ -369,7 +370,7 @@ function renderImportRows() {
 }
 
 $('#imp-filter').addEventListener('change', renderImportRows);
-['#imp-create', '#imp-resolve', '#imp-images', '#imp-empty'].forEach((s) => $(s).addEventListener('change', previewImport));
+['#imp-create', '#imp-resolve', '#imp-images', '#imp-empty', '#imp-unnamed'].forEach((s) => $(s).addEventListener('change', previewImport));
 
 function chooseImportFile(file) {
   if (!file) return;

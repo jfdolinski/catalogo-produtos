@@ -48,6 +48,17 @@ try {
   const semNome = await api('GET', '/api/admin/product-ids?provisional=1&order=requests');
   const [{ id: provId }] = await sql('SELECT product_id AS id FROM barcodes WHERE code = $1', novo);
   ok('fila "Sem nome" traz só os provisórios', semNome.s === 200 && semNome.b.ids.length === 1 && semNome.b.ids[0] === provId, semNome.b);
+  // Planilha com "Atualizar só produtos sem nome": o provisório recebe o nome, o que já tem nome fica igual
+  const novo2 = gtin('789555000302');
+  await fetch(`${base}/api/v1/barcodes/${novo2}`); // outro provisório, só para a planilha
+  const [{ id: provId2 }] = await sql('SELECT product_id AS id FROM barcodes WHERE code = $1', novo2);
+  const planilha = `codigo_barras;nome\n${novo2};Nome Vindo da Planilha\n${gtin('789100031650')};Nome Que Não Deve Entrar\n`;
+  const ipv = await st.upload('/api/admin/import/preview', [['file', 'p.csv', planilha]], { only_unnamed: '1' });
+  ok('prévia: só o sem nome é atualizado, o outro é ignorado', ipv.s === 200 && ipv.b.summary.update === 1 && ipv.b.summary.skip === 1, ipv.b.summary ?? ipv.b);
+  const iap = await api('POST', '/api/admin/import/apply', { rows: ipv.b.rows, options: { only_unnamed: true } });
+  ok('aplica só no sem nome', iap.s === 200 && iap.b.summary.updated === 1
+    && (await api('GET', `/api/admin/products/${provId2}`)).b.name === 'Nome Vindo da Planilha'
+    && (await api('GET', `/api/admin/products/${p.b.id}`)).b.name !== 'Nome Que Não Deve Entrar', iap.b.summary ?? iap.b);
 
   // ---- Conversão dos antigos (uma vez, ao subir o servidor) ----
   const [{ id: velho }] = await sql(`INSERT INTO products (name, brand, manufacturer, category, unit) VALUES

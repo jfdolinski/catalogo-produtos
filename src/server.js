@@ -1435,6 +1435,8 @@ function importOptions(b = {}) {
     overwrite_empty: bool(b.overwrite_empty, false),
     resolve_pending: bool(b.resolve_pending, true),
     download_images: bool(b.download_images, true),
+    // Só atualiza produtos que ainda estão sem nome (nome provisório do cadastro automático)
+    only_unnamed: bool(b.only_unnamed, false),
   };
 }
 
@@ -1487,6 +1489,12 @@ async function planImport(rows, opts) {
         const before = await db.prepare('SELECT * FROM products WHERE id = ?').get(pid);
         item.product_id = pid;
         item.current_name = before.name;
+        if (opts.only_unnamed && !String(before.name ?? '').startsWith(AUTO_NAME)) {
+          item.action = 'skip';
+          item.name = before.name;
+          item.warnings.push('produto já tem nome (opção "só produtos sem nome")');
+          return item;
+        }
         for (const [f, v] of Object.entries(values)) {
           if (String(before[f] ?? '') !== String(v ?? '')) item.changes[f] = { from: before[f], to: v };
         }
