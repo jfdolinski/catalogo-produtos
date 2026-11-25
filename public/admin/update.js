@@ -39,7 +39,7 @@ const qForm = $('#q-form');
 $('#q-start').addEventListener('click', async () => {
   const source = $('#q-source').value;
   const params = new URLSearchParams(source ? { [source]: 1 } : {});
-  if (source === 'pending') params.set('order', 'requests');
+  if (source === 'pending' || source === 'provisional') params.set('order', 'requests');
   const { ids } = await api('GET', `/api/admin/product-ids?${params}`);
   queue.ids = ids;
   queue.index = 0;
@@ -435,7 +435,7 @@ $('#imp-model').addEventListener('click', (e) => {
 });
 
 // ============================================================ Busca automática em lote
-const TARGET_LABELS = { pending: 'Pendentes', no_image: 'Sem foto real', overdue: 'Vencidos' };
+const TARGET_LABELS = { pending: 'Pendentes', provisional: 'Sem nome', no_image: 'Sem foto real', overdue: 'Vencidos' };
 
 async function loadAutofill() {
   let s;

@@ -1690,8 +1690,9 @@ admin.get('/autofill', (_req, res) => res.json({ ...autofillStatus(), cosmos_tok
 
 admin.post('/autofill/start', async (req, res) => {
   if (autofill.running) throw new HttpError(409, 'Já existe uma busca automática em andamento');
-  const target = ['pending', 'no_image', 'overdue'].includes(req.body.target) ? req.body.target : 'pending';
-  let ids = await productIds({ [target]: 1 }, target === 'pending' ? 'requests' : undefined);
+  // provisional: produtos sem nome (cadastro automático, "PRODUTO NÃO CADASTRADO ..."), mais consultados primeiro
+  const target = ['pending', 'no_image', 'overdue', 'provisional'].includes(req.body.target) ? req.body.target : 'pending';
+  let ids = await productIds({ [target]: 1 }, ['pending', 'provisional'].includes(target) ? 'requests' : undefined);
   if (req.body.skip_checked !== false) {
     const checked = new Set((await db.prepare('SELECT product_id FROM autofill_log').all()).map((r) => r.product_id));
     ids = ids.filter((id) => !checked.has(id));

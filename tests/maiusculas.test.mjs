@@ -44,6 +44,10 @@ try {
   await fetch(`${base}/api/v1/barcodes/${novo}`);
   const [prov] = await sql('SELECT p.name FROM products p JOIN barcodes b ON b.product_id = p.id WHERE b.code = $1', novo);
   ok('nome provisório não muda', prov.name === `PRODUTO NÃO CADASTRADO ${novo}`, prov.name);
+  // Fila de atualização "Sem nome": só os provisórios, mais consultados primeiro
+  const semNome = await api('GET', '/api/admin/product-ids?provisional=1&order=requests');
+  const [{ id: provId }] = await sql('SELECT product_id AS id FROM barcodes WHERE code = $1', novo);
+  ok('fila "Sem nome" traz só os provisórios', semNome.s === 200 && semNome.b.ids.length === 1 && semNome.b.ids[0] === provId, semNome.b);
 
   // ---- Conversão dos antigos (uma vez, ao subir o servidor) ----
   const [{ id: velho }] = await sql(`INSERT INTO products (name, brand, manufacturer, category, unit) VALUES
