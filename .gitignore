@@ -4,3 +4,5 @@ dist/
 # Relatórios avulsos gerados durante o trabalho (dados do catálogo, não código)
 relatorios/
 .claude/settings.local.json
+# Endereço SSH da VPS (usuario@ip), lido pelos scripts de deploy
+deploy/vps-host.txt

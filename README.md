@@ -47,7 +47,7 @@ SQLite antes (`catalogo.db.antes-postgres-<data>`).
 
 ## Produção (Easypanel)
 
-Publicado em **https://catalogo.b6nhiy.easypanel.host/** (VPS `212.85.12.23`, Ubuntu 24.04 com Easypanel).
+Publicado em **https://catalogo.b6nhiy.easypanel.host/** (VPS Ubuntu 24.04 com Easypanel; o endereço SSH fica em `deploy/vps-host.txt`, fora do Git).
 Código em **github.com/jfdolinski/catalogo-produtos** (privado).
 
 | Item          | Onde                                                                                         |
