@@ -161,3 +161,8 @@ export function planoDaFoto(largura: number, altura: number, a: Pick<AjustesCame
   const novo = a.ladoMaximo && maior > a.ladoMaximo ? (w >= h ? { width: a.ladoMaximo } : { height: a.ladoMaximo }) : null;
   return { recorte, novo };
 }
+
+/** Página do Menor Preço (Nota Paraná) com o código já pesquisado; a cidade é a do próprio celular/navegador. */
+export function linkMenorPreco(codigo: string): string {
+  return `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(codigo.trim())}`;
+}

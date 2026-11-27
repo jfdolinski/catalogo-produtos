@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ErroApi, type Api, type Produto } from './api';
 import { CampoSugestao } from './CampoSugestao';
-import { comoPrincipal } from './regras';
+import { comoPrincipal, linkMenorPreco } from './regras';
 import { Alerta, BarraAcoes, Botao, Cartao, cores, LinhaBotoes } from './ui';
 
 const mensagem = (e: unknown) => (e instanceof ErroApi ? e.message : 'Algo deu errado. Tente de novo.');
@@ -125,6 +125,11 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
       {fila ? <Text style={estilos.posicao}>Fila: item {fila.posicao} de {fila.total}</Text> : null}
       <Text style={estilos.titulo}>{p.name}</Text>
       <Text style={estilos.codigos}>{p.barcodes.map((b) => b.code).join(' · ')}{p.pending ? '  ·  pendente de atualização' : ''}</Text>
+      {p.barcodes[0] ? (
+        <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(linkMenorPreco(p.barcodes[0].code))} style={estilos.linkPreco}>
+          <Text style={estilos.linkPrecoTexto}>💲 Ver preço no Menor Preço</Text>
+        </Pressable>
+      ) : null}
       {erro ? <Alerta>{erro}</Alerta> : null}
       {ok ? <Alerta tipo="ok">{ok}</Alerta> : null}
 
@@ -189,7 +194,9 @@ const estilos = StyleSheet.create({
   titulo: { fontSize: 20, fontWeight: '700', color: cores.texto },
   posicao: { fontSize: 13, fontWeight: '600', color: cores.marca, marginBottom: 4 },
   linha: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  codigos: { fontSize: 14, color: cores.suave, marginTop: 2, marginBottom: 12 },
+  codigos: { fontSize: 14, color: cores.suave, marginTop: 2, marginBottom: 6 },
+  linkPreco: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 8 },
+  linkPrecoTexto: { fontSize: 15, color: cores.marca, fontWeight: '600' },
   secao: { fontSize: 16, fontWeight: '700', color: cores.texto, marginBottom: 10 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   foto: { width: 96, height: 96, borderRadius: 8, backgroundColor: cores.borda },

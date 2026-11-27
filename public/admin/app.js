@@ -17,6 +17,7 @@ document.querySelectorAll('[data-reform-fields]').forEach((box) => {
 const state = { token: localStorage.getItem('adminToken') || '', current: null, searchTimer: null, filter: '', merge: null };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const googleImagesUrl = (code) => `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(code)}`;
+const menorPrecoUrl = (code) => `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(code)}`;
 // Aceita ISO ('...Z') ou o formato do SQLite ('AAAA-MM-DD HH:MM:SS', UTC)
 const toDate = (s) => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
 const fmtDate = (s) => (s ? toDate(s).toLocaleString('pt-BR') : '');
@@ -408,10 +409,13 @@ function addBarcodeRow(b = {}) {
   const row = $('#barcode-row').content.firstElementChild.cloneNode(true);
   const input = $('.bc-code', row);
   const google = $('.bc-google', row);
+  const preco = $('.bc-preco', row);
   const syncGoogle = () => {
     const code = input.value.trim();
     google.classList.toggle('hidden', !code);
     google.href = googleImagesUrl(code);
+    preco.classList.toggle('hidden', !code);
+    preco.href = menorPrecoUrl(code);
   };
   input.addEventListener('input', syncGoogle);
   input.value = b.code || '';

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { codigoDeBarras, codigoValido, comoPrincipal, gtinValido, lerQrDeVinculo, servidorValido, sugestoesUteis, versaoMaisNova } from './regras.ts';
+import { codigoDeBarras, codigoValido, comoPrincipal, gtinValido, lerQrDeVinculo, servidorValido, sugestoesUteis, versaoMaisNova, linkMenorPreco } from './regras.ts';
 
 test('QR de vínculo do catálogo', () => {
   assert.deepEqual(lerQrDeVinculo('catalogo://vincular?servidor=https%3A%2F%2Fcatalogo.exemplo.com&codigo=ABCDE23456'), { servidor: 'https://catalogo.exemplo.com', codigo: 'ABCDE23456' });
@@ -70,4 +70,8 @@ test('ajustes da câmera', async () => {
   assert.deepEqual(planoDaFoto(4000, 3000, { formato: '1:1', ladoMaximo: 1600 }), { recorte: { originX: 500, originY: 0, width: 3000, height: 3000 }, novo: { width: 1600 } });
   assert.deepEqual(planoDaFoto(1200, 900, { formato: '4:3', ladoMaximo: 1600 }), { recorte: null, novo: null }, 'foto menor não aumenta');
   assert.deepEqual(planoDaFoto(4000, 3000, { formato: '4:3', ladoMaximo: 0 }), { recorte: null, novo: null }, 'original');
+});
+
+test('link do Menor Preço', () => {
+  assert.equal(linkMenorPreco(' 7898079002963 '), 'https://menorpreco.notaparana.pr.gov.br/app?termo=7898079002963');
 });
