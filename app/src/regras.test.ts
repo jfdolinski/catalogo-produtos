@@ -73,5 +73,5 @@ test('ajustes da câmera', async () => {
 });
 
 test('link do Menor Preço', () => {
-  assert.equal(linkMenorPreco(' 7898079002963 '), 'https://menorpreco.notaparana.pr.gov.br/app?termo=7898079002963');
+  assert.equal(linkMenorPreco(' 7898079002963 '), 'https://menorpreco.notaparana.pr.gov.br/app?termo=7898079002963&local=6gkzqf9vb');
 });

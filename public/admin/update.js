@@ -85,7 +85,7 @@ function renderQueueItem(p) {
   $('#q-codes').innerHTML = p.barcodes.map((b) => `
     <span class="q-code"><code>${esc(b.code)}</code> <small class="muted">${esc(b.type)}</small>
       <a href="${googleImagesUrl(b.code)}" target="_blank" rel="noopener" class="bc-google">🔍 Google</a>
-      <a href="${menorPrecoUrl(b.code)}" target="_blank" rel="noopener" class="bc-google" title="Abre o Menor Preço (Nota Paraná) com este código, na sua cidade">💲 Preço</a></span>`).join('') || '<span class="muted">sem código de barras</span>';
+      <a href="${menorPrecoUrl(b.code)}" target="_blank" rel="noopener" class="bc-google" title="Abre o Menor Preço (Nota Paraná) com este código, em Curitiba">💲 Preço</a></span>`).join('') || '<span class="muted">sem código de barras</span>';
   const req = (p.requests || []).filter((r) => r.status === 'pendente');
   $('#q-badges').innerHTML = [
     p.pending ? `<span class="tag">pendente · ${fmtN(req.reduce((a, r) => a + r.request_count, 0))} consulta(s)</span>` : '',

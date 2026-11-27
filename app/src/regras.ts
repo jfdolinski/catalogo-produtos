@@ -162,7 +162,7 @@ export function planoDaFoto(largura: number, altura: number, a: Pick<AjustesCame
   return { recorte, novo };
 }
 
-/** Página do Menor Preço (Nota Paraná) com o código já pesquisado; a cidade é a do próprio celular/navegador. */
+/** Página do Menor Preço (Nota Paraná) com o código já pesquisado; já em Curitiba (local=6gkzqf9vb, centro): sem a cidade o site abre só o mapa, sem pesquisar. */
 export function linkMenorPreco(codigo: string): string {
-  return `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(codigo.trim())}`;
+  return `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(codigo.trim())}&local=6gkzqf9vb`;
 }

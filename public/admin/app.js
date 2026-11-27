@@ -17,7 +17,7 @@ document.querySelectorAll('[data-reform-fields]').forEach((box) => {
 const state = { token: localStorage.getItem('adminToken') || '', current: null, searchTimer: null, filter: '', merge: null };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const googleImagesUrl = (code) => `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(code)}`;
-const menorPrecoUrl = (code) => `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(code)}`;
+const menorPrecoUrl = (code) => `https://menorpreco.notaparana.pr.gov.br/app?termo=${encodeURIComponent(code)}&local=6gkzqf9vb`; // local = Curitiba (centro); sem ele o site não pesquisa
 // Aceita ISO ('...Z') ou o formato do SQLite ('AAAA-MM-DD HH:MM:SS', UTC)
 const toDate = (s) => new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
 const fmtDate = (s) => (s ? toDate(s).toLocaleString('pt-BR') : '');
