@@ -61,7 +61,7 @@
           <a href="#/" data-view="dashboard" data-perm="dashboard">Dashboard</a>
           <a href="#/produtos" data-view="produtos" data-perm="produtos">Produtos</a>
           <a href="#/nomes" data-view="nomes" data-perm="produtos">Nomes</a>
-          <a href="#/valores" data-view="valores" data-perm="produtos">Marcas e categorias</a>
+          <a href="#/valores" data-view="valores" data-perm="produtos">Marcas e departamentos</a>
           <a href="#/dicionario" data-view="dicionario" data-perm="produtos">Dicionário</a>
           <a href="#/atualizar" data-view="atualizar" data-perm="atualizacao">Atualização</a>
           <a href="#/ncm" data-view="ncm" data-perm="ncm">NCM</a>
@@ -207,7 +207,7 @@
             <option value="name">Nome</option>
             <option value="brand">Marca</option>
             <option value="manufacturer">Fabricante</option>
-            <option value="category">Categoria</option>
+            <option value="category">Departamento</option>
           </select>
         </label>
         <label>Procurar<input name="find" maxlength="120" required placeholder="ex.: Comp"></label>
@@ -237,7 +237,7 @@
         <strong>Testar um texto</strong>
         <div class="dict-test-row">
           <select id="dict-test-field" aria-label="Campo do teste">
-            <option value="name">Nome</option><option value="brand">Marca</option><option value="manufacturer">Fabricante</option><option value="category">Categoria</option>
+            <option value="name">Nome</option><option value="brand">Marca</option><option value="manufacturer">Fabricante</option><option value="category">Departamento</option>
           </select>
           <input id="dict-test-text" placeholder="Digite um nome para ver como fica com todas as regras" aria-label="Texto para testar">
         </div>
@@ -255,14 +255,14 @@
     <section id="values" class="page hidden">
       <div class="dash-head">
         <div>
-          <h1>Marcas e categorias</h1>
+          <h1>Marcas e departamentos</h1>
           <div class="muted small">Corrija a grafia ou junte valores repetidos: a alteração vale para todos os produtos que usam o valor. Renomear para um valor que já existe junta os dois.</div>
         </div>
       </div>
       <div class="upd-tabs" role="tablist">
         <button type="button" data-vfield="brand" class="active" role="tab">Marcas</button>
         <button type="button" data-vfield="manufacturer" role="tab">Fabricantes / laboratórios</button>
-        <button type="button" data-vfield="category" role="tab">Categorias</button>
+        <button type="button" data-vfield="category" role="tab">Departamentos</button>
       </div>
       <div class="values-toolbar">
         <input id="values-q" type="search" placeholder="Buscar" aria-label="Buscar valores">
@@ -289,7 +289,7 @@
         </select>
         <input id="sheet-f-brand" class="sheet-vfilter" list="brands" placeholder="Marca" aria-label="Filtrar por marca" title="Digite (vazio) para ver os produtos sem marca" autocomplete="off">
         <input id="sheet-f-manufacturer" class="sheet-vfilter" list="manufacturers" placeholder="Fabricante" aria-label="Filtrar por fabricante ou laboratório" title="Digite (vazio) para ver os produtos sem fabricante" autocomplete="off">
-        <input id="sheet-f-category" class="sheet-vfilter" list="categories" placeholder="Categoria" aria-label="Filtrar por categoria" title="Digite (vazio) para ver os produtos sem categoria" autocomplete="off">
+        <input id="sheet-f-category" class="sheet-vfilter" list="categories" placeholder="Departamento" aria-label="Filtrar por departamento" title="Digite (vazio) para ver os produtos sem departamento" autocomplete="off">
         <div class="actions">
           <button type="button" id="sheet-undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled>↶</button>
           <button type="button" id="sheet-redo" title="Refazer (Ctrl+Y)" aria-label="Refazer" disabled>↷</button>
@@ -302,7 +302,7 @@
         <span class="sheet-fx" aria-hidden="true">fx</span>
         <input id="sheet-formula" aria-label="Conteúdo da célula atual" autocomplete="off">
       </div>
-      <div id="sheet-scroll" class="sheet-scroll" tabindex="0" role="grid" aria-label="Planilha de nomes, marcas, fabricantes e categorias dos produtos" aria-colcount="8">
+      <div id="sheet-scroll" class="sheet-scroll" tabindex="0" role="grid" aria-label="Planilha de nomes, marcas, fabricantes e departamentos dos produtos" aria-colcount="8">
         <div id="sheet-head" class="sheet-head" role="row"></div>
         <div id="sheet-canvas" class="sheet-canvas">
           <div id="sheet-rows" class="sheet-rows" role="rowgroup"></div>
@@ -679,7 +679,7 @@
             <form id="q-form" class="grid" autocomplete="off">
               <label class="span2">Nome *<input name="name" required></label>
               <label>Marca<input name="brand"></label>
-              <label>Categoria<input name="category" list="categories"></label>
+              <label>Departamento<input name="category" list="categories"></label>
               <label>Unidade<input name="unit" placeholder="UN, CX, KG..."></label>
               <label>SKU<input name="sku"></label>
               <label class="span2">Descrição<textarea name="description" rows="3"></textarea></label>
@@ -703,7 +703,7 @@
           <table class="dash-table cols-help">
             <tr><td><code>codigo_barras</code> (ou EAN, GTIN)</td><td>um ou mais códigos separados por <code>|</code> — é por ele que o produto é localizado</td></tr>
             <tr><td><code>sku</code></td><td>usado para localizar quando não há código de barras</td></tr>
-            <tr><td><code>nome</code>, <code>descricao</code>, <code>marca</code>, <code>categoria</code>, <code>unidade</code></td><td>dados do cadastro</td></tr>
+            <tr><td><code>nome</code>, <code>descricao</code>, <code>marca</code>, <code>departamento</code> (ou <code>categoria</code>), <code>unidade</code></td><td>dados do cadastro</td></tr>
             <tr><td><code>ativo</code></td><td>sim/não</td></tr>
             <tr><td><code>imagem_url</code></td><td>URLs de imagens separadas por <code>|</code> (são baixadas)</td></tr>
           </table>
@@ -1024,7 +1024,7 @@
           <div class="grid">
             <label>Marca<input name="brand" list="brands"><small class="fd" data-field="brand"></small></label>
             <label>Fabricante / laboratório<input name="manufacturer" list="manufacturers"><small class="fd" data-field="manufacturer"></small></label>
-            <label>Categoria<input name="category" list="categories"><small class="fd" data-field="category"></small></label>
+            <label>Departamento<input name="category" list="categories"><small class="fd" data-field="category"></small></label>
             <label>SKU / Código interno<input name="sku"><small class="fd" data-field="sku"></small></label>
             <label>Unidade de medida<input name="unit" placeholder="UN, CX, KG, ML..." list="units"><small class="fd" data-field="unit"></small></label>
             <label>Quantidade na embalagem<input name="pack_qty" inputmode="decimal" placeholder="ex.: 12"><small class="fd" data-field="pack_qty"></small></label>
@@ -1180,8 +1180,8 @@
       <h2>Edição em massa</h2>
       <p id="bulk-target" class="small"></p>
       <div class="bulk-fields">
-        <label class="check"><input type="checkbox" data-enable="category"> Categoria</label>
-        <input name="category" list="categories" disabled placeholder="nova categoria">
+        <label class="check"><input type="checkbox" data-enable="category"> Departamento</label>
+        <input name="category" list="categories" disabled placeholder="novo departamento">
         <label class="check"><input type="checkbox" data-enable="brand"> Marca</label>
         <input name="brand" disabled placeholder="nova marca">
         <label class="check"><input type="checkbox" data-enable="unit"> Unidade</label>

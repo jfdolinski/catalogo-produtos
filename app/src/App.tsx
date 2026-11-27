@@ -351,7 +351,7 @@ function Principal({ sessao, encerrar }: { sessao: Sessao; encerrar: (razao: str
                   <Text style={estilos.opcaoTexto}>{o.nome}</Text>
                 </Pressable>
               ))}
-              <Text style={estilos.ajuda}>Revise os cadastros um a um, como no painel: fotos, nome, marca e categoria. "Salvar e próximo" grava, renova o prazo e tira dos pendentes.</Text>
+              <Text style={estilos.ajuda}>Revise os cadastros um a um, como no painel: fotos, nome, marca e departamento. "Salvar e próximo" grava, renova o prazo e tira dos pendentes.</Text>
             </>
           ) : (
             <>

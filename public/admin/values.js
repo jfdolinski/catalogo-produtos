@@ -1,7 +1,7 @@
 // Tela Marcas e categorias: lista os valores de marca, fabricante e categoria com a quantidade de produtos,
 // e renomeia (ou junta) um valor em todos os produtos de uma vez.
 // Usa $, api, esc, fmtN e loadCategories de app.js, e setMsg de update.js.
-const VALUE_LABELS = { brand: ['marca', 'Sem marca'], manufacturer: ['fabricante', 'Sem fabricante'], category: ['categoria', 'Sem categoria'] };
+const VALUE_LABELS = { brand: ['marca', 'Sem marca'], manufacturer: ['fabricante', 'Sem fabricante'], category: ['departamento', 'Sem departamento'] };
 const VALUES_LIMIT = 1000;
 const values = { field: 'brand', items: [], empty: 0, seq: 0, timer: null };
 

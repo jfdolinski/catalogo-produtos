@@ -8,7 +8,7 @@ const SHEET_COLS = [
   { key: 'name', label: 'Nome', width: 420, sortable: true, editable: true, required: true, max: 300 },
   { key: 'brand', label: 'Marca', width: 160, sortable: true, editable: true, max: 120, list: 'brands' },
   { key: 'manufacturer', label: 'Fabricante', width: 160, sortable: true, editable: true, max: 120, list: 'manufacturers' },
-  { key: 'category', label: 'Categoria', width: 150, sortable: true, editable: true, max: 120, list: 'categories' },
+  { key: 'category', label: 'Departamento', width: 150, sortable: true, editable: true, max: 120, list: 'categories' },
   { key: 'status', label: 'Situação', width: 100 },
 ];
 const NAME_COL = SHEET_COLS.findIndex((c) => c.key === 'name');
@@ -266,7 +266,7 @@ function replay(from, to, side) {
   drawSheet();
 }
 
-const ONLY_EDITABLE = 'Só as colunas Nome, Marca, Fabricante e Categoria podem ser alteradas.';
+const ONLY_EDITABLE = 'Só as colunas Nome, Marca, Fabricante e Departamento podem ser alteradas.';
 
 // Linhas e colunas editáveis da seleção (null se nenhuma coluna da seleção é editável)
 async function selectedCells() {
@@ -609,7 +609,7 @@ async function saveNames() {
   const entries = [...sheet.dirty.values()];
   const invalid = entries.filter((d) => invalidValue(d.field, d.value));
   if (invalid.length) {
-    setMsg('#names-msg', `${fmtN(invalid.length)} célula(s) inválida(s): nome vazio ou texto longo demais (nome até 300 caracteres; marca, fabricante e categoria até 120). Corrija antes de salvar.`, 'error');
+    setMsg('#names-msg', `${fmtN(invalid.length)} célula(s) inválida(s): nome vazio ou texto longo demais (nome até 300 caracteres; marca, fabricante e departamento até 120). Corrija antes de salvar.`, 'error');
     drawSheet();
     return;
   }

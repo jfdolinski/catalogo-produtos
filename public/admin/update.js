@@ -94,7 +94,7 @@ function renderQueueItem(p) {
   const note = $('#q-autofill-note');
   note.classList.toggle('hidden', !p.autofill);
   if (p.autofill) {
-    const labels = { name: 'nome', brand: 'marca', category: 'categoria', description: 'descrição', unit: 'unidade', images: 'foto' };
+    const labels = { name: 'nome', brand: 'marca', category: 'departamento', description: 'descrição', unit: 'unidade', images: 'foto' };
     note.textContent = `Preenchido automaticamente por ${p.autofill.source} em ${fmtDate(p.autofill.filled_at)}`
       + (p.autofill.fields.length ? ` (${p.autofill.fields.map((f) => labels[f] || f).join(', ')})` : '') + ' — confira antes de salvar.';
   }
@@ -299,7 +299,7 @@ window.addEventListener('keydown', (e) => {
 // ============================================================ Importar planilha
 const imp = { file: null, data: null };
 const ACTION_LABELS = { create: 'Criar', update: 'Atualizar', unchanged: 'Sem mudança', skip: 'Ignorada', error: 'Erro' };
-const FIELD_NAMES = { sku: 'SKU', name: 'Nome', description: 'Descrição', brand: 'Marca', category: 'Categoria', unit: 'Unidade', active: 'Ativo' };
+const FIELD_NAMES = { sku: 'SKU', name: 'Nome', description: 'Descrição', brand: 'Marca', category: 'Departamento', unit: 'Unidade', active: 'Ativo' };
 
 function importOptions() {
   return {
@@ -427,7 +427,7 @@ $('#imp-apply').addEventListener('click', async () => {
 
 $('#imp-model').addEventListener('click', (e) => {
   e.preventDefault();
-  const csv = '﻿codigo_barras;sku;nome;descricao;marca;categoria;unidade;ativo;imagem_url\r\n'
+  const csv = '﻿codigo_barras;sku;nome;descricao;marca;departamento;unidade;ativo;imagem_url\r\n'
     + '7891000315507;CAF-500;Café Torrado 500g;Café torrado e moído;Marca Exemplo;Mercearia;UN;sim;https://exemplo.com/foto1.jpg|https://exemplo.com/foto2.jpg\r\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));

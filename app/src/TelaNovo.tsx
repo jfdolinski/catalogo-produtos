@@ -104,7 +104,7 @@ export function TelaNovo({ api, codigo, aoCadastrar, aoVoltar }: { api: Api; cod
         <Text style={estilos.rotulo}>Nome *</Text>
         <TextInput accessibilityLabel="Nome" style={estilos.campo} value={nome} onChangeText={setNome} autoCapitalize="sentences" maxLength={300} multiline />
         <CampoSugestao api={api} campo="brand" rotulo="Marca" valor={marca} aoMudar={setMarca} />
-        <CampoSugestao api={api} campo="category" rotulo="Categoria" valor={categoria} aoMudar={setCategoria} />
+        <CampoSugestao api={api} campo="category" rotulo="Departamento" valor={categoria} aoMudar={setCategoria} />
       </Cartao>
     </ScrollView>
     <BarraAcoes>

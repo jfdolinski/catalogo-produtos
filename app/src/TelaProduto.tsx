@@ -112,7 +112,7 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
   function proximo() {
     const continuar = () => aoProximo(`${p.name}: ${reais.length} foto${reais.length === 1 ? '' : 's'}${revisado ? ', revisado' : ''}.`);
     if (mudou) {
-      Alert.alert('Alterações não salvas', 'Você alterou o nome, a marca ou a categoria e não salvou.', [
+      Alert.alert('Alterações não salvas', 'Você alterou o nome, a marca ou o departamento e não salvou.', [
         { text: 'Voltar', style: 'cancel' },
         { text: 'Descartar', style: 'destructive', onPress: continuar },
       ]);
@@ -158,7 +158,7 @@ export function TelaProduto({ api, inicial, aviso, aoFotografar, aoProximo, fila
         <Text style={estilos.rotulo}>Nome</Text>
         <TextInput accessibilityLabel="Nome" style={estilos.campo} value={nome} onChangeText={setNome} autoCapitalize="sentences" maxLength={300} multiline />
         <CampoSugestao api={api} campo="brand" rotulo="Marca" valor={marca} aoMudar={setMarca} />
-        <CampoSugestao api={api} campo="category" rotulo="Categoria" valor={categoria} aoMudar={setCategoria} />
+        <CampoSugestao api={api} campo="category" rotulo="Departamento" valor={categoria} aoMudar={setCategoria} />
         <Botao titulo="Salvar alterações" variante="secundario" disabled={!mudou || !!ocupado} ocupado={ocupado === 'salvar'} onPress={() => void salvar()} />
         <View style={{ height: 8 }} />
         <Botao titulo={revisado ? '✓ Revisado' : 'Marcar como revisado'} variante="secundario" disabled={revisado || !!ocupado} ocupado={ocupado === 'revisado'} onPress={() => void marcarRevisado()} />

@@ -5,7 +5,7 @@ import { db, tx } from './db.js';
 import { HttpError, iso } from './business.js';
 import { applyDictionary, caseWords, cleanLine, PROVISIONAL_NAME, setDictionary } from './text.js';
 
-export const DICT_FIELDS = { name: 'Nome', brand: 'Marca', manufacturer: 'Fabricante', category: 'Categoria' };
+export const DICT_FIELDS = { name: 'Nome', brand: 'Marca', manufacturer: 'Fabricante', category: 'Departamento' };
 const MAX_LISTA = 300; // produtos mostrados na prévia
 const BLOCO = 500;
 
@@ -23,7 +23,7 @@ export async function loadDictionary() {
 
 function cleanRule(body) {
   const field = String(body.field ?? 'name');
-  if (!DICT_FIELDS[field]) throw new HttpError(400, 'Campo inválido: use nome, marca, fabricante ou categoria');
+  if (!DICT_FIELDS[field]) throw new HttpError(400, 'Campo inválido: use nome, marca, fabricante ou departamento');
   const find = cleanLine(body.find ?? '');
   const replace = cleanLine(body.replace ?? ''); // vazio = tirar o trecho
   if (!find) throw new HttpError(400, 'Informe o trecho a procurar');

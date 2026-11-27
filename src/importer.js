@@ -17,7 +17,7 @@ const ALIASES = {
 
 export const FIELD_LABELS = {
   barcodes: 'Códigos de barras', sku: 'SKU', name: 'Nome', description: 'Descrição', brand: 'Marca',
-  category: 'Categoria', unit: 'Unidade', active: 'Ativo', images: 'Imagens (URLs)',
+  category: 'Departamento', unit: 'Unidade', active: 'Ativo', images: 'Imagens (URLs)',
 };
 
 export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')

@@ -588,7 +588,7 @@ pub.get('/p/:id', async (req, res) => {
     <dl>
       ${p.sku ? `<dt>SKU</dt><dd>${html(p.sku)}</dd>` : ''}
       ${p.brand ? `<dt>Marca</dt><dd>${html(p.brand)}</dd>` : ''}
-      ${p.category ? `<dt>Categoria</dt><dd>${html(p.category)}</dd>` : ''}
+      ${p.category ? `<dt>Departamento</dt><dd>${html(p.category)}</dd>` : ''}
       ${p.unit ? `<dt>Unidade</dt><dd>${html(p.unit)}</dd>` : ''}
       ${p.manufacturer ? `<dt>Fabricante</dt><dd>${html(p.manufacturer)}</dd>` : ''}
       ${p.is_medicine && p.actives.length ? `<dt>Princípios ativos</dt><dd>${p.actives.map((a) => html(a.name + (a.concentration ? ` ${a.concentration}` : ''))).join('<br>')}</dd>` : ''}
@@ -736,7 +736,7 @@ admin.get('/field-values/:field', async (req, res) => {
 // "to" vazio tira o valor dos produtos. Cada produto passa pela gravação normal (datas por campo), sem renovar prazo.
 admin.post('/field-values/:field/rename', async (req, res) => {
   const col = { brand: 'brand', manufacturer: 'manufacturer', category: 'category' }[req.params.field];
-  if (!col) throw new HttpError(400, 'Só marca, fabricante e categoria podem ser renomeados');
+  if (!col) throw new HttpError(400, 'Só marca, fabricante e departamento podem ser renomeados');
   const from = cleanLine(String(req.body.from ?? ''));
   const to = cleanProductField(col, String(req.body.to ?? ''));
   if (!from) throw new HttpError(400, 'Informe o valor atual');
@@ -788,7 +788,7 @@ const NAME_SORTS = {
 };
 const MAX_NAME_LENGTH = 300;
 // Colunas editáveis da planilha: nome (obrigatório) e os dados gerais de texto curto
-const SHEET_FIELDS = { name: { label: 'nome', max: MAX_NAME_LENGTH, required: true }, brand: { label: 'marca', max: 120 }, manufacturer: { label: 'fabricante', max: 120 }, category: { label: 'categoria', max: 120 } };
+const SHEET_FIELDS = { name: { label: 'nome', max: MAX_NAME_LENGTH, required: true }, brand: { label: 'marca', max: 120 }, manufacturer: { label: 'fabricante', max: 120 }, category: { label: 'departamento', max: 120 } };
 const MAX_NAMES_PER_SAVE = 2000;
 
 admin.get('/product-names', async (req, res) => {
